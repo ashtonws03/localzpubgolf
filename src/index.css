@@ -1,0 +1,30 @@
+/* Tailwind v4 entry */
+@import "tailwindcss";
+
+/* ---- Global base to match canvas exactly ---- */
+:root{
+  /* Same palette the canvas used */
+  --primary-blue: #0a58ff;
+  --accent-yellow: #ffd200;
+}
+
+/* Make the site feel identical to canvas defaults */
+html, body, #root { height: 100%; }
+body {
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+}
+
+/* Inputs/buttons reset to match canvas look */
+input, select, button, textarea {
+  @apply outline-none;
+}
+
+/* Card polish (mirrors the canvas component defaults) */
+.card {
+  @apply rounded-2xl border bg-white shadow-sm;
+}
+
+/* Utility helpers used by the canvas components */
+.badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
+}
