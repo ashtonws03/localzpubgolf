@@ -1,4 +1,4 @@
-import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, onSnapshot, doc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
@@ -134,25 +134,46 @@ export default function BetBuilderApp() {
   const [adminPinInput, setAdminPinInput] = useState("");
   const pinInputRef = useRef(null);
 
-  // Book + selection
-  const [config, setConfig] = useState(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      return raw ? JSON.parse(raw) : defaultConfig;
-    } catch { return defaultConfig; }
-  });
-  const [slip, setSlip] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_BETSLIP) || "[]"); } catch { return []; }
-  });
+// --- STATE ---
+// Config state (markets/legs) — synced with Firestore
+const [config, setConfig] = useState(defaultConfig);
 
-  // Bets
-  const [bets, setBets] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_BETS) || "[]"); } catch { return []; }
-  });
+// Bets (local init; Firestore subscription will overwrite after first snapshot)
+const [bets, setBets] = useState(() => {
+  try { return JSON.parse(localStorage.getItem(LS_BETS) || "[]"); } catch { return []; }
+});
 
-  useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(config)); }, [config]);
-  useEffect(() => { localStorage.setItem(LS_BETSLIP, JSON.stringify(slip)); }, [slip]);
-  useEffect(() => {
+// Betslip (which legs are currently selected by the player)
+const [slip, setSlip] = useState(() => {
+  try { 
+    return JSON.parse(localStorage.getItem(LS_BETSLIP) || "[]"); 
+  } catch { 
+    return []; 
+  }
+});
+
+// --- EFFECTS ---
+// Subscribe to Firestore for live config updates (REPLACES old LS_KEY effect)
+useEffect(() => {
+  const configRef = doc(db, "config", "current");
+  const unsubscribe = onSnapshot(configRef, (docSnap) => {
+    if (docSnap.exists()) {
+      setConfig(docSnap.data());
+    } else {
+      // If no config exists yet, create one
+      setDoc(configRef, defaultConfig);
+    }
+  });
+  return () => unsubscribe();
+}, []);
+
+// Persist the current local betslip so user's selections survive refresh
+useEffect(() => {
+  localStorage.setItem(LS_BETSLIP, JSON.stringify(slip));
+}, [slip]);
+
+// Live-stream ALL bets from Firestore for Admin + players' "My Bets"
+useEffect(() => {
   const q = query(collection(db, "bets"), orderBy("placedAt", "desc"));
   const unsubscribe = onSnapshot(q, (snapshot) => {
     const allBets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -160,9 +181,47 @@ export default function BetBuilderApp() {
   });
   return () => unsubscribe();
 }, []);
-  useEffect(() => { localStorage.setItem(LS_USER, JSON.stringify({ authed, name: userName, email: userEmail })); }, [authed, userName, userEmail]);
 
-  useEffect(() => { if (showAdminModal && pinInputRef.current) { pinInputRef.current.focus(); } }, [showAdminModal]);
+// Persist the logged-in gate info (access code passed, name/email)
+useEffect(() => {
+  localStorage.setItem(LS_USER, JSON.stringify({ authed, name: userName, email: userEmail }));
+}, [authed, userName, userEmail]);
+
+// Focus the PIN input when admin modal opens
+useEffect(() => {
+  if (showAdminModal && pinInputRef.current) {
+    pinInputRef.current.focus();
+  }
+}, [showAdminModal]);
+
+// --- HELPERS ---
+// Save config to Firestore (use this instead of setConfig(...) in admin actions)
+const saveConfig = async (newConfig) => {
+  setConfig(newConfig);
+  await setDoc(doc(db, "config", "current"), newConfig);
+};
+// Manual admin save/refresh helpers
+const [saving, setSaving] = useState(false);
+const [lastSavedAt, setLastSavedAt] = useState(null);
+
+const forceSave = async () => {
+  try {
+    setSaving(true);
+    await setDoc(doc(db, "config", "current"), config); // push current config
+    setLastSavedAt(Date.now());
+    toast.success("Config saved to cloud");
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to save to cloud");
+  } finally {
+    setSaving(false);
+  }
+};
+
+const refreshFromCloud = () => {
+  // onSnapshot already keeps you live; this button is a visible "pull" action.
+  toast.info("Fetching latest config from cloud…");
+};
 
   // Tabs
   const [tab, setTab] = useState("builder"); // builder | slip | admin
@@ -189,15 +248,89 @@ export default function BetBuilderApp() {
   const totalSinglesPayout = selectedLegs.reduce((acc, l) => acc + payoutFrom(Math.min(singleStakes[l.id] || 0, singleCaps[l.id] || 0), l.odds), 0);
 
   // Admin: market editing
-  const addMarket = () => setConfig((c) => ({ ...c, markets: [...c.markets, { id: uid(), name: "New Market", active: true, legs: [] }] }));
-  const removeMarket = (marketId) => setConfig((c) => ({ ...c, markets: c.markets.filter((m) => m.id !== marketId) }));
-  const updateMarket = (marketId, patch) => setConfig((c) => ({ ...c, markets: c.markets.map((m) => (m.id === marketId ? { ...m, ...patch } : m)) }));
-  const addLeg = (marketId) => setConfig((c) => ({ ...c, markets: c.markets.map((m) => (m.id === marketId ? { ...m, legs: [...m.legs, { id: uid(), label: "New Leg", odds: 2.0, active: true, result: "pending" }] } : m)) }));
-  const removeLeg = (marketId, legId) => {
-    setConfig((c) => ({ ...c, markets: c.markets.map((m) => (m.id === marketId ? { ...m, legs: m.legs.filter((l) => l.id !== legId) } : m)) }));
-    setSlip((ids) => ids.filter((id) => id !== legId));
+  // Add a new market
+const addMarket = () => {
+  const newConfig = {
+    ...config,
+    markets: [
+      ...config.markets,
+      { id: uid(), name: "New Market", active: true, legs: [] },
+    ],
   };
-  const updateLeg = (marketId, legId, patch) => setConfig((c) => ({ ...c, markets: c.markets.map((m) => (m.id === marketId ? { ...m, legs: m.legs.map((l) => (l.id === legId ? { ...l, ...patch } : l)) } : m)) }));
+  saveConfig(newConfig);
+};
+
+// Remove a market
+const removeMarket = (marketId) => {
+  const newConfig = {
+    ...config,
+    markets: config.markets.filter((m) => m.id !== marketId),
+  };
+  saveConfig(newConfig);
+};
+
+// Update a market (rename, toggle active, etc.)
+const updateMarket = (marketId, patch) => {
+  const newConfig = {
+    ...config,
+    markets: config.markets.map((m) =>
+      m.id === marketId ? { ...m, ...patch } : m
+    ),
+  };
+  saveConfig(newConfig);
+};
+
+// Add a leg to a market
+const addLeg = (marketId) => {
+  const newConfig = {
+    ...config,
+    markets: config.markets.map((m) =>
+      m.id === marketId
+        ? {
+            ...m,
+            legs: [
+              ...m.legs,
+              { id: uid(), label: "New Leg", odds: 2.0, active: true, result: "pending" },
+            ],
+          }
+        : m
+    ),
+  };
+  saveConfig(newConfig);
+};
+
+// Remove a leg
+const removeLeg = (marketId, legId) => {
+  const newConfig = {
+    ...config,
+    markets: config.markets.map((m) =>
+      m.id === marketId
+        ? { ...m, legs: m.legs.filter((l) => l.id !== legId) }
+        : m
+    ),
+  };
+  saveConfig(newConfig);
+  // also remove it from the current slip if selected
+  setSlip((ids) => ids.filter((id) => id !== legId));
+};
+
+// Update a leg (label, odds, status)
+const updateLeg = (marketId, legId, patch) => {
+  const newConfig = {
+    ...config,
+    markets: config.markets.map((m) =>
+      m.id === marketId
+        ? {
+            ...m,
+            legs: m.legs.map((l) =>
+              l.id === legId ? { ...l, ...patch } : l
+            ),
+          }
+        : m
+    ),
+  };
+  saveConfig(newConfig);
+};
 
   // Place bet
   const placeBet = async () => {
@@ -298,117 +431,191 @@ export default function BetBuilderApp() {
     );
   }
 
-  // --- Main UI ---
-  return (
-    <div className="min-h-screen bg-neutral-50 p-4 md:p-8">
-      <div className="mx-auto max-w-6xl">
-        <Row className="justify-between gap-4 mb-4 relative z-30">
-          <h1 className="text-2xl md:text-3xl font-bold">Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span></h1>
-          <Row className="gap-3">
-            <div className="text-xs text-neutral-600">Signed in as <strong>{userName}</strong>{userEmail ? ` · ${userEmail}` : ""}</div>
-            <Button variant="ghost" onClick={() => { try { localStorage.removeItem(LS_USER); } catch {} setAuthed(false); setUserName(""); setUserEmail(""); setAccessCode(""); toast.success("Logged out"); }}>Log out</Button>
-            {isAdmin ? (
-              <Row className="gap-2">
-                <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
-                <Button variant="outline" onClick={() => { setIsAdmin(false); localStorage.removeItem(LS_ADMIN); toast.success("Admin disabled"); }}>Turn off</Button>
-              </Row>
-            ) : (
-              <Button variant="outline" className="relative z-40" onClick={() => setShowAdminModal(true)}>Admin</Button>
-            )}
-          </Row>
+// --- Main UI ---
+return (
+  <div className="min-h-screen bg-neutral-50 p-4 md:p-8">
+    <div className="mx-auto max-w-6xl">
+      <Row className="justify-between gap-4 mb-4 relative z-30">
+        <h1 className="text-2xl md:text-3xl font-bold">
+          Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
+        </h1>
+        <Row className="gap-3">
+          <div className="text-xs text-neutral-600">
+            Signed in as <strong>{userName}</strong>{userEmail ? ` · ${userEmail}` : ""}
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              try { localStorage.removeItem(LS_USER); } catch {}
+              setAuthed(false);
+              setUserName("");
+              setUserEmail("");
+              setAccessCode("");
+              toast.success("Logged out");
+            }}
+          >
+            Log out
+          </Button>
+          {isAdmin ? (
+            <Row className="gap-2">
+              <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsAdmin(false);
+                  localStorage.removeItem(LS_ADMIN);
+                  toast.success("Admin disabled");
+                }}
+              >
+                Turn off
+              </Button>
+            </Row>
+          ) : (
+            <Button variant="outline" className="relative z-40" onClick={() => setShowAdminModal(true)}>
+              Admin
+            </Button>
+          )}
         </Row>
+      </Row>
 
-        {/* Admin PIN Modal */}
-        {showAdminModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onMouseDown={(e)=>{ if(e.target===e.currentTarget) setShowAdminModal(false); }}>
-            <div className="w-full max-w-sm rounded-2xl bg-white border shadow-lg p-4" onMouseDown={(e)=>e.stopPropagation()}>
-              <div className="text-lg font-semibold mb-2">Enter Admin PIN</div>
-              <p className="text-sm text-neutral-600 mb-3">Access to admin tools is protected. Enter the 4-digit PIN.</p>
-              <Input ref={pinInputRef} inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="••••" value={adminPinInput} onChange={(e)=> setAdminPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,4))} />
-              <Row className="justify-end gap-2 mt-3">
-                <Button variant="ghost" onClick={()=>{ setShowAdminModal(false); setAdminPinInput(""); }}>Cancel</Button>
-                <Button style={{ background: PRIMARY_BLUE, color: "white" }} onClick={()=>{
-                  if (adminPinInput === ADMIN_PIN) { setIsAdmin(true); localStorage.setItem(LS_ADMIN, "1"); setShowAdminModal(false); setAdminPinInput(""); toast.success("Admin unlocked"); setTab("admin"); }
-                  else { toast.error("Incorrect PIN"); }
-                }}>Unlock</Button>
-              </Row>
-            </div>
+      {/* Admin PIN Modal */}
+      {showAdminModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowAdminModal(false); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white border shadow-lg p-4"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="text-lg font-semibold mb-2">Enter Admin PIN</div>
+            <p className="text-sm text-neutral-600 mb-3">Access to admin tools is protected. Enter the 4-digit PIN.</p>
+            <Input
+              ref={pinInputRef}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              placeholder="••••"
+              value={adminPinInput}
+              onChange={(e) => setAdminPinInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+            />
+            <Row className="justify-end gap-2 mt-3">
+              <Button variant="ghost" onClick={() => { setShowAdminModal(false); setAdminPinInput(""); }}>
+                Cancel
+              </Button>
+              <Button
+                style={{ background: PRIMARY_BLUE, color: "white" }}
+                onClick={() => {
+                  if (adminPinInput === ADMIN_PIN) {
+                    setIsAdmin(true);
+                    localStorage.setItem(LS_ADMIN, "1");
+                    setShowAdminModal(false);
+                    setAdminPinInput("");
+                    toast.success("Admin unlocked");
+                    setTab("admin");
+                  } else {
+                    toast.error("Incorrect PIN");
+                  }
+                }}
+              >
+                Unlock
+              </Button>
+            </Row>
           </div>
-        )}
-
-        {/* Tabs header */}
-        <div className="grid grid-cols-3 rounded-xl overflow-hidden mb-3 sticky top-16 z-10" style={{ background: PRIMARY_BLUE }}>
-          {[
-            { id: "builder", label: "Builder" },
-            { id: "slip", label: "Betslip" },
-            ...(isAdmin ? [{ id: "admin", label: "Admin" }] : []),
-          ].map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`py-2.5 text-sm ${tab === t.id ? "bg-white text-[#0a58ff]" : "text-white"}`}
-            >
-              {t.label}
-            </button>
-          ))}
         </div>
+      )}
 
-        {/* Builder */}
-        {tab === "builder" && (
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 space-y-4">
-              {/* Admin-only title editor */}
-              {isAdmin && (
-                <Card>
-                  <CardContent className="space-y-3">
-                    <h2 className="text-lg font-semibold">Competition / Event Title</h2>
-                    <p className="text-sm text-neutral-600">Edit the name of the game/competition users are betting on.</p>
-                    <div className="grid md:grid-cols-3 gap-2 items-center">
-                      <Label className="md:col-span-1">Title</Label>
-                      <Input className="md:col-span-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus-visible:outline-none" value={config.eventTitle} onChange={(e) => setConfig((c) => ({ ...c, eventTitle: e.target.value }))} />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+      {/* Tabs header */}
+      <div
+        className="grid grid-cols-3 rounded-xl overflow-hidden mb-3 sticky top-16 z-10"
+        style={{ background: PRIMARY_BLUE }}
+      >
+        {[
+          { id: "builder", label: "Builder" },
+          { id: "slip", label: "Betslip" },
+          ...(isAdmin ? [{ id: "admin", label: "Admin" }] : []),
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`py-2.5 text-sm ${tab === t.id ? "bg-white text-[#0a58ff]" : "text-white"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-              <MarketList
-                config={config}
-                isAdmin={isAdmin}
-                onAddMarket={addMarket}
-                onRemoveMarket={removeMarket}
-                onUpdateMarket={updateMarket}
-                onAddLeg={addLeg}
-                onRemoveLeg={removeLeg}
-                onUpdateLeg={updateLeg}
-                onToggleSelect={(legId) => setSlip((prev) => (prev.includes(legId) ? prev.filter((id) => id !== legId) : [...prev, legId]))}
-                selected={slip}
-              />
-            </div>
+      {/* Admin Save Bar */}
+{isAdmin && (
+  <div className="mb-3 rounded-xl border bg-white p-3 flex flex-wrap items-center gap-3">
+    <div className="text-sm font-medium">
+      Admin controls
+      {lastSavedAt && (
+        <span className="ml-2 text-xs text-neutral-500">
+          Last saved {new Date(lastSavedAt).toLocaleTimeString()}
+        </span>
+      )}
+    </div>
+    <div className="ml-auto flex items-center gap-2">
+      <button
+        className="h-10 px-4 rounded-xl text-sm font-medium border bg-[#ffd200] text-black hover:opacity-90 disabled:opacity-60"
+        onClick={forceSave}
+        disabled={saving}
+        title="Write current markets/legs/odds to Firestore"
+      >
+        {saving ? "Saving…" : "Save changes"}
+      </button>
+      <button
+        className="h-10 px-4 rounded-xl text-sm font-medium border bg-white hover:bg-neutral-50"
+        onClick={refreshFromCloud}
+        title="Reload latest config from Firestore"
+      >
+        Refresh from cloud
+      </button>
+    </div>
+  </div>
+)}
 
-            <div className="md:col-span-1">
-              <BetSlip
-                mode={mode}
-                setMode={setMode}
-                selectedLegs={selectedLegs}
-                singleStakes={singleStakes}
-                setSingleStakes={setSingleStakes}
-                singleCaps={singleCaps}
-                multiStake={multiStake}
-                setMultiStake={setMultiStake}
-                multiCap={multiCap}
-                onRemove={(legId) => setSlip((prev) => prev.filter((id) => id !== legId))}
-                onPlace={placeBet}
-                bets={bets}
-                userKey={userKey}
-                settleBet={settleBet}
-              />
-            </div>
+      {/* Builder */}
+      {tab === "builder" && (
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="md:col-span-2 space-y-4">
+            {/* Admin-only title editor */}
+            {isAdmin && (
+              <Card>
+                <CardContent className="space-y-3">
+                  <h2 className="text-lg font-semibold">Competition / Event Title</h2>
+                  <p className="text-sm text-neutral-600">Edit the name of the game/competition users are betting on.</p>
+                  <div className="grid md:grid-cols-3 gap-2 items-center">
+                    <Label className="md:col-span-1">Title</Label>
+                    {/* IMPORTANT: use saveConfig, not setConfig, so edits sync to Firestore */}
+                    <Input
+                      className="md:col-span-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus-visible:outline-none"
+                      value={config.eventTitle}
+                      onChange={(e) => setConfig({ ...config, eventTitle: e.target.value })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <MarketList
+              config={config}
+              isAdmin={isAdmin}
+              onAddMarket={addMarket}
+              onRemoveMarket={removeMarket}
+              onUpdateMarket={updateMarket}
+              onAddLeg={addLeg}
+              onRemoveLeg={removeLeg}
+              onUpdateLeg={updateLeg}
+              onToggleSelect={(legId) =>
+                setSlip((prev) => (prev.includes(legId) ? prev.filter((id) => id !== legId) : [...prev, legId]))
+              }
+              selected={slip}
+            />
           </div>
-        )}
 
-        {/* Betslip (wide) */}
-        {tab === "slip" && (
-          <div className="mt-4">
+          <div className="md:col-span-1">
             <BetSlip
               mode={mode}
               setMode={setMode}
@@ -424,57 +631,103 @@ export default function BetBuilderApp() {
               bets={bets}
               userKey={userKey}
               settleBet={settleBet}
-              wide
             />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Admin */}
-        {tab === "admin" && isAdmin && (
-          <div className="mt-4 grid md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 space-y-4">
-              <Card>
-                <CardContent className="space-y-3">
-                  <h2 className="text-lg font-semibold">Settle Legs</h2>
-                  <p className="text-sm text-neutral-600">Mark outcomes for each leg. Bets settle automatically. (Won = ✅, Lost = ❌, Pending = …)</p>
-                  <Separator />
-                  <div className="space-y-4">
-                    {config.markets.map((m) => (
-                      <div key={m.id}>
-                        <div className="font-medium mb-2">{m.name}</div>
-                        <div className="space-y-2">
-                          {m.legs.map((l) => (
-                            <div key={l.id} className="rounded-2xl border p-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-sm font-medium">{l.label}</div>
-                                  <div className="text-xs text-neutral-600">Odds {l.odds.toFixed(2)}</div>
-                                </div>
-                                <Badge className="bg-neutral-100 text-neutral-700 capitalize">{l.result || 'pending'}</Badge>
+      {/* Betslip (wide) */}
+      {tab === "slip" && (
+        <div className="mt-4">
+          <BetSlip
+            mode={mode}
+            setMode={setMode}
+            selectedLegs={selectedLegs}
+            singleStakes={singleStakes}
+            setSingleStakes={setSingleStakes}
+            singleCaps={singleCaps}
+            multiStake={multiStake}
+            setMultiStake={setMultiStake}
+            multiCap={multiCap}
+            onRemove={(legId) => setSlip((prev) => prev.filter((id) => id !== legId))}
+            onPlace={placeBet}
+            bets={bets}
+            userKey={userKey}
+            settleBet={settleBet}
+            wide
+          />
+        </div>
+      )}
+
+      {/* Admin */}
+      {tab === "admin" && isAdmin && (
+        <div className="mt-4 grid md:grid-cols-3 gap-4">
+          <div className="md:col-span-2 space-y-4">
+            <Card>
+              <CardContent className="space-y-3">
+                <h2 className="text-lg font-semibold">Settle Legs</h2>
+                <p className="text-sm text-neutral-600">
+                  Mark outcomes for each leg. Bets settle automatically. (Won = ✅, Lost = ❌, Pending = …)
+                </p>
+                <Separator />
+                <div className="space-y-4">
+                  {config.markets.map((m) => (
+                    <div key={m.id}>
+                      <div className="font-medium mb-2">{m.name}</div>
+                      <div className="space-y-2">
+                        {m.legs.map((l) => (
+                          <div key={l.id} className="rounded-2xl border p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-medium">{l.label}</div>
+                                <div className="text-xs text-neutral-600">Odds {l.odds.toFixed(2)}</div>
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <Button size="sm" variant={l.result === "won" ? "default" : "outline"} onClick={() => updateLeg(m.id, l.id, { result: "won" })}>Won</Button>
-                                <Button size="sm" variant={l.result === "lost" ? "default" : "outline"} onClick={() => updateLeg(m.id, l.id, { result: "lost" })}>Lost</Button>
-                                <Button size="sm" variant={l.result === "pending" ? "default" : "outline"} onClick={() => updateLeg(m.id, l.id, { result: "pending" })}>Pending</Button>
-                              </div>
+                              <Badge className="bg-neutral-100 text-neutral-700 capitalize">
+                                {l.result || "pending"}
+                              </Badge>
                             </div>
-                          ))}
-                        </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant={l.result === "won" ? "default" : "outline"}
+                                onClick={() => updateLeg(m.id, l.id, { result: "won" })}
+                              >
+                                Won
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={l.result === "lost" ? "default" : "outline"}
+                                onClick={() => updateLeg(m.id, l.id, { result: "lost" })}
+                              >
+                                Lost
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={l.result === "pending" ? "default" : "outline"}
+                                onClick={() => updateLeg(m.id, l.id, { result: "pending" })}
+                              >
+                                Pending
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="md:col-span-1 space-y-4">
-              <AdminBetsPanel bets={bets} settleBet={settleBet} />
-            </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+          <div className="md:col-span-1 space-y-4">
+            <AdminBetsPanel bets={bets} settleBet={settleBet} />
+          </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 }
+
 
 // -------------------- Subcomponents --------------------
 function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMarket, onAddLeg, onRemoveLeg, onUpdateLeg, onToggleSelect, selected }) {
@@ -527,10 +780,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                             </div>
                             <div className="w-full">
                               <Label className="text-xs text-neutral-600">Odds</Label>
-                              <Input className="w-full text-sm h-11" type="number" step="0.01" inputMode="decimal" value={l.odds} onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                onUpdateLeg(m.id, l.id, { odds: Number.isFinite(v) ? clamp2(v) : 0 });
-                              }} />
+                              <Input className="w-full text-sm h-11" type="number" step="0.01" inputMode="decimal" value={l.odds} onChange={(e) => updateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })} />
                             </div>
                             <div className="w-full">
                               <Label className="text-xs text-neutral-600">Status</Label>
