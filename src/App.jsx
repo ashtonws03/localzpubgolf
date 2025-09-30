@@ -1,3 +1,5 @@
+import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
+import { db } from "./firebase";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
 /**
@@ -150,7 +152,14 @@ export default function BetBuilderApp() {
 
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(config)); }, [config]);
   useEffect(() => { localStorage.setItem(LS_BETSLIP, JSON.stringify(slip)); }, [slip]);
-  useEffect(() => { localStorage.setItem(LS_BETS, JSON.stringify(bets)); }, [bets]);
+  useEffect(() => {
+  const q = query(collection(db, "bets"), orderBy("placedAt", "desc"));
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const allBets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setBets(allBets);
+  });
+  return () => unsubscribe();
+}, []);
   useEffect(() => { localStorage.setItem(LS_USER, JSON.stringify({ authed, name: userName, email: userEmail })); }, [authed, userName, userEmail]);
 
   useEffect(() => { if (showAdminModal && pinInputRef.current) { pinInputRef.current.focus(); } }, [showAdminModal]);
@@ -192,33 +201,43 @@ export default function BetBuilderApp() {
 
   // Place bet
   const placeBet = async () => {
-    if (!authed || !userName) { toast.error("Enter access code & your name first"); return; }
-    if (selectedLegs.length === 0) { toast.error("Add some legs first"); return; }
+  if (!authed || !userName) {
+    toast.error("Enter access code & your name first");
+    return;
+  }
+  if (selectedLegs.length === 0) {
+    toast.error("Add some legs first");
+    return;
+  }
 
-    const legsSnap = selectedLegs.map((l) => ({ legId: l.id, label: l.label, marketName: l.marketName, odds: l.odds }));
-    const base = { id: uid(), userName, userEmail, userKey, legs: legsSnap, placedAt: Date.now() };
+  const legsSnap = selectedLegs.map((l) => ({
+    legId: l.id,
+    label: l.label,
+    marketName: l.marketName,
+    odds: l.odds,
+  }));
 
-    if (mode === "multi") {
-      const stake = Math.min(multiStake, multiCap);
-      if (stake <= 0) { toast.error("Stake must be > 0 (capped for $200 payout)"); return; }
-      const rec = { ...base, mode: "multi", multiStake: clamp2(stake) };
-      setBets((b) => [rec, ...b]);
-      toast.success("Multi placed");
-    } else {
-      const stakes = {};
-      let any = false;
-      selectedLegs.forEach((l) => {
-        const raw = singleStakes[l.id] || 0;
-        const cap = singleCaps[l.id] || 0;
-        const val = Math.min(raw, cap);
-        if (val > 0) { stakes[l.id] = clamp2(val); any = true; }
-      });
-      if (!any) { toast.error("Enter stake(s) for Singles"); return; }
-      const rec = { ...base, mode: "singles", stakesByLeg: stakes };
-      setBets((b) => [rec, ...b]);
-      toast.success("Singles placed");
-    }
+  const betRecord = {
+    id: uid(),
+    userName,
+    userEmail,
+    userKey,
+    legs: legsSnap,
+    placedAt: Date.now(),
+    mode,
+    ...(mode === "multi"
+      ? { multiStake: clamp2(multiStake) }
+      : { stakesByLeg: singleStakes }),
   };
+
+  try {
+    await addDoc(collection(db, "bets"), betRecord);
+    toast.success("Bet saved to cloud!");
+  } catch (e) {
+    console.error("Error adding bet:", e);
+    toast.error("Failed to save bet");
+  }
+};
 
   // Leg result lookup and settlement
   const legResult = (legId) => flatLegs.find((l) => l.id === legId)?.result || "pending";
