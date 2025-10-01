@@ -28,3 +28,17 @@ input, select, button, textarea {
 .badge {
   @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
 }
+
+/* Hide the native disclosure triangle in WebKit */
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* By default (closed): show the horizontal line, hide the arrow */
+details .icon-arrow { display: none; }
+details .icon-line  { display: inline-block; }
+
+/* When open: show the arrow, hide the horizontal line */
+details[open] .icon-arrow { display: inline-block; }
+details[open] .icon-line  { display: none; }
+
