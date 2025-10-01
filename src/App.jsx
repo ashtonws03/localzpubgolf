@@ -319,6 +319,12 @@ const refreshFromCloud = () => {
     [config]
   );
   const selectedLegs = flatLegs.filter((l) => slip.includes(l.id) && l.active !== false && l.marketActive);
+  
+  // Map of legId -> current result ("won" | "lost" | "pending") so BetSlip can live-read status
+  const legResultMap = useMemo(
+    () => Object.fromEntries(flatLegs.map(l => [l.id, l.result || "pending"])),
+    [flatLegs]
+  );
 
   // Betslip math
   const [mode, setMode] = useState("multi"); // 'multi' | 'singles'
@@ -727,7 +733,8 @@ return (
   bets={bets}
   userKey={userKey}
   settleBet={settleBet}
-  tint="yellow"   // NEW: only the small builder betslip gets yellow
+  tint="yellow"
+  legResults={legResultMap}
 />
 
           </div>
@@ -754,6 +761,7 @@ return (
   settleBet={settleBet}
   wide
   tint="yellow"
+  legResults={legResultMap}
 />
         </div>
       )}
@@ -1025,7 +1033,8 @@ function BetSlip({
   bets,
   userKey,
   settleBet,
-  tint, // "yellow" to tint the small betslip
+  tint,
+  legResults,  // ⬅ NEW: { [legId]: "won" | "lost" | "pending" }
 }) {
   const oddsArr = selectedLegs.map((l) => l.odds);
   const totalOdds = multiplyOdds(oddsArr);
@@ -1107,16 +1116,7 @@ function BetSlip({
     );
   };
 
-  const legResult = (legId) => {
-    // Look up the leg's current result from live config (same logic as in parent)
-    // This component receives `settleBet`, but per-leg status comes from config.
-    // We'll mirror parent behavior by checking the DOM of selectedLegs only if needed,
-    // but simplest is to rely on the parent-provided function when summarizing at bet-level.
-    // For icons, we need direct per-leg status from config; we can pass it down via props if desired.
-    // Here, we infer via selectedLegs and fallback to "pending".
-    const fromSelected = selectedLegs.find((l) => l.id === legId)?.result;
-    return fromSelected || "pending";
-  };
+  // Use the parent-provided `legResult` prop for per-leg status (avoid redeclaring `legResult` here).
 
   return (
     <Card
@@ -1342,7 +1342,7 @@ function BetSlip({
 
                     <div className="mt-2 space-y-1">
                       {b.legs.map((l) => {
-                        const status = legResult(l.legId); // "won" | "lost" | "pending"
+                        const status = (legResults && legResults[l.legId]) || "pending";
                         return (
                           <div
                             key={l.legId}
