@@ -910,18 +910,19 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                       </div>
                       <div className="flex items-center gap-2">
                         {!isAdmin && (
-                          <Button
-  size="sm"
-  className={
-    selected.includes(l.id)
-      ? "bg-[#0a58ff] text-white hover:bg-[#ffd200] hover:text-black"
-      : "bg-[#0a58ff] text-white hover:bg-[#ffd200] hover:text-black"
-  }
-  onClick={() => onToggleSelect(l.id)}
->
-  {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
-</Button>
-                        )}
+  <Button
+    variant="ghost"
+    size="sm"
+    className={
+      selected.includes(l.id)
+        ? "bg-[#ffd200] text-black hover:bg-[#ffd200] hover:text-black"
+        : "bg-[#0a58ff] text-white hover:bg-[#ffd200] hover:text-black"
+    }
+    onClick={() => onToggleSelect(l.id)}
+  >
+    {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
+  </Button>
+)}
                         {isAdmin && (
                           <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>Delete</Button>
                         )}
@@ -1106,7 +1107,8 @@ const sectionClass = isYellow
             )}
 
             <Button
-  className="w-full bg-[#0a58ff] text-white hover:bg-[#66a3ff] active:bg-[#0044cc] active:translate-y-[1px]"
+  variant="ghost"
+  className="w-full bg-[#0a58ff] text-white hover:bg-[#e6f0ff] hover:text-[#002147] active:bg-[#0044cc] active:text-white active:translate-y-[1px]"
   onClick={onPlace}
 >
   Place {mode === "multi" ? "Multi" : "Singles"}
