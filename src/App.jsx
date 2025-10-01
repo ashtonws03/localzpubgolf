@@ -911,7 +911,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                       <div className="flex items-center gap-2">
                         {!isAdmin && (
   <Button
-    variant="ghost"
+    variant="default"
     size="sm"
     className={
       selected.includes(l.id)
@@ -1107,8 +1107,8 @@ const sectionClass = isYellow
             )}
 
             <Button
-  variant="ghost"
-  className="w-full bg-[#0a58ff] text-white hover:bg-[#e6f0ff] hover:text-[#002147] active:bg-[#0044cc] active:text-white active:translate-y-[1px]"
+  variant="default"
+  className="w-full bg-[#0a58ff] text-white hover:bg-white hover:text-[#0a58ff] active:bg-[#0044cc] active:text-white active:translate-y-[1px]"
   onClick={onPlace}
 >
   Place {mode === "multi" ? "Multi" : "Singles"}
