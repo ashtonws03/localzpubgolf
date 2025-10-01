@@ -1375,7 +1375,9 @@ function AdminBetsPanel({ bets, settleBet, onDeleteBet }) {
     <Card>
       <CardContent className="space-y-3">
         <h2 className="text-lg font-semibold">Placed Bets</h2>
-        <p className="text-sm text-neutral-600">Shows bettor name/email, time, mode, legs, and current status based on leg results.</p>
+        <p className="text-sm text-neutral-600">
+          Shows bettor name/email, time, mode, legs, and current status based on leg results.
+        </p>
         <Separator />
         <div className="space-y-3 max-h-[70vh] overflow-auto pr-2">
           {bets.length === 0 ? (
@@ -1384,37 +1386,40 @@ function AdminBetsPanel({ bets, settleBet, onDeleteBet }) {
             bets.map((b) => {
               const s = settleBet(b);
               return (
-                <div key={b.id} className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white`}>
-                 <div className="flex items-start justify-between">
-                   <div>
-                     <div className="text-sm">
-                       <strong>{b.userName}</strong>{b.userEmail ? ` · ${b.userEmail}` : ""}
-                     </div>
-                     <div className="text-xs text-neutral-600">{formatPlacedAt(b.placedAt)}</div>
-                   </div>
-                   <Button
-                     size="sm"
-                     variant="destructive"
-                     onClick={() => {
-                       if (confirm("Delete this bet? This cannot be undone.")) onDeleteBet?.(b.id);
-                     }}
-                   >
-                     Delete
-                   </Button>
-                 </div>
-    
-                 <Separator className="my-2" />
-                 <div className="text-xs">
-                   Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong> · Potential payout: ${s.potentialPayout.toFixed(2)}
-                 </div>
-    
-                 <div className="mt-2 space-y-1">
-                   {b.legs.map((l) => (
-                     <div key={l.legId} className="text-sm flex items-center justify-between">
-                       <div className="truncate pr-2">{l.marketName} — {l.label}</div>
-                       <div className="text-xs">@ {l.odds.toFixed(2)}</div>
-                     </div>
-                   ))}
+                <div key={b.id} className="border rounded-2xl p-3 bg-white">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-sm">
+                        <strong>{b.userName}</strong>
+                        {b.userEmail ? ` · ${b.userEmail}` : ""}
+                      </div>
+                      <div className="text-xs text-neutral-600">{formatPlacedAt(b.placedAt)}</div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        if (confirm("Delete this bet? This cannot be undone.")) onDeleteBet?.(b.id);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+
+                  <Separator className="my-2" />
+                  <div className="text-xs">
+                    Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong> · Potential payout: ${s.potentialPayout.toFixed(2)}
+                  </div>
+
+                  <div className="mt-2 space-y-1">
+                    {b.legs.map((l) => (
+                      <div key={l.legId} className="text-sm flex items-center justify-between">
+                        <div className="truncate pr-2">
+                          {l.marketName} — {l.label}
+                        </div>
+                        <div className="text-xs">@ {l.odds.toFixed(2)}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
