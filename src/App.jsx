@@ -738,22 +738,23 @@ return (
       {tab === "slip" && (
         <div className="mt-4">
           <BetSlip
-            mode={mode}
-            setMode={setMode}
-            selectedLegs={selectedLegs}
-            singleStakes={singleStakes}
-            setSingleStakes={setSingleStakes}
-            singleCaps={singleCaps}
-            multiStake={multiStake}
-            setMultiStake={setMultiStake}
-            multiCap={multiCap}
-            onRemove={(legId) => setSlip((prev) => prev.filter((id) => id !== legId))}
-            onPlace={placeBet}
-            bets={bets}
-            userKey={userKey}
-            settleBet={settleBet}
-            wide
-          />
+  mode={mode}
+  setMode={setMode}
+  selectedLegs={selectedLegs}
+  singleStakes={singleStakes}
+  setSingleStakes={setSingleStakes}
+  singleCaps={singleCaps}
+  multiStake={multiStake}
+  setMultiStake={setMultiStake}
+  multiCap={multiCap}
+  onRemove={(legId) => setSlip((prev) => prev.filter((id) => id !== legId))}
+  onPlace={placeBet}
+  bets={bets}
+  userKey={userKey}
+  settleBet={settleBet}
+  wide
+  tint="yellow"
+/>
         </div>
       )}
 
@@ -963,30 +964,28 @@ function BetSlip({
     0
   );
 
-  const myBets = Array.isArray(bets) ? bets.filter(b => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey) : [];
+const myBets = Array.isArray(bets) ? bets.filter(b => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey) : [];
 
-  // Small-betslip (builder tab) visual toggle
-const isSmallYellow = !wide && tint === "yellow";
+  // Yellow mode applies to both small (builder) and wide (slip) betslips
+const isYellow = tint === "yellow";
 
-// Reusable tile styles: small betslip = no border + faint shadow, else keep existing border
-const tileClass = isSmallYellow
+// Reusable tile styles: yellow mode = no border + faint shadow, else border
+const tileClass = isYellow
   ? "rounded-2xl bg-white shadow-sm p-3"
   : "rounded-2xl border p-3 bg-white";
 
-const sectionClass = isSmallYellow
+const sectionClass = isYellow
   ? "rounded-2xl bg-white shadow-sm p-3"
   : "rounded-2xl border p-3 bg-white";
 
     return (
     <Card
-      variant="plain"
-      className={`${wide ? "" : "sticky top-28 z-0"}`}
-          style={{
-      background: wide
-        ? LIGHT_BLUE_BG
-        : (tint === "yellow" ? ACCENT_YELLOW : undefined),  // now solid brand yellow
-    }}
-    >
+  variant="plain"
+  className={`${wide ? "" : "sticky top-28 z-0"}`}
+  style={{
+    background: tint === "yellow" ? ACCENT_YELLOW : (wide ? LIGHT_BLUE_BG : undefined),
+  }}
+>
       <CardContent className="space-y-4">
         <Row className="justify-between">
           <h2 className="text-lg font-semibold">Betslip</h2>
@@ -1116,7 +1115,7 @@ const sectionClass = isSmallYellow
                   {myBets.map((b) => {
                     const s = typeof settleBet === 'function' ? settleBet(b) : { status: '—', potentialPayout: 0 };
                     return (
-                      <div key={b.id} className="border rounded-2xl p-3">
+                      <div key={b.id} className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white`}>
                         <div className="text-xs text-neutral-600">{formatPlacedAt(b.placedAt)}</div>
                         <div className="text-xs">Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong></div>
                         <div className="mt-1 space-y-1">
@@ -1154,7 +1153,7 @@ function AdminBetsPanel({ bets, settleBet, onDeleteBet }) {
             bets.map((b) => {
               const s = settleBet(b);
               return (
-               <div key={b.id} className="border rounded-2xl p-3">
+                <div key={b.id} className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white`}>
                  <div className="flex items-start justify-between">
                    <div>
                      <div className="text-sm">
