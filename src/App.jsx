@@ -912,9 +912,11 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                         {!isAdmin && (
                           <Button
   size="sm"
-  className={selected.includes(l.id)
-    ? "bg-[#0a58ff] text-white hover:bg-[#0044cc] active:bg-[#003399] active:translate-y-[1px]"
-    : "bg-[#0a58ff] text-white hover:bg-[#0044cc] active:bg-[#003399] active:translate-y-[1px]"}
+  className={
+    selected.includes(l.id)
+      ? "bg-[#0a58ff] text-white hover:bg-[#ffd200] hover:text-black"
+      : "bg-[#0a58ff] text-white hover:bg-[#ffd200] hover:text-black"
+  }
   onClick={() => onToggleSelect(l.id)}
 >
   {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
@@ -1104,7 +1106,7 @@ const sectionClass = isYellow
             )}
 
             <Button
-  className="w-full bg-[#0a58ff] text-white hover:bg-[#0044cc] active:bg-[#003399] active:translate-y-[1px]"
+  className="w-full bg-[#0a58ff] text-white hover:bg-[#66a3ff] active:bg-[#0044cc] active:translate-y-[1px]"
   onClick={onPlace}
 >
   Place {mode === "multi" ? "Multi" : "Singles"}
