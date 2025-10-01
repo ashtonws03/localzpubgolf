@@ -23,8 +23,9 @@ const ACCESS_CODE = "LOCALZPG25";
 const ADMIN_PIN = "2855";
 const PRIMARY_BLUE = "#0a58ff";
 const ACCENT_YELLOW = "#ffd200";
-const LIGHT_BLUE_BG = "#eef4ff";     // subtle page-friendly blue
-const LIGHT_YELLOW_BG = "#fff7cc";   // gentle yellow for the small betslip
+const LIGHT_BLUE_BG = "#e6f0ff";     // stronger light blue (Sportsbet vibe)
+const LIGHT_YELLOW_BG = "#ffd200";   // solid yellow for small betslip
+const NAVY_TEXT = "#002147";         // deep navy for headings in tinted areas
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clamp2 = (n) => (Number.isFinite(n) ? Number(n.toFixed(2)) : 0);
@@ -526,7 +527,7 @@ const updateLeg = (marketId, legId, patch) => {
 // --- Main UI ---
 return (
   <div className="min-h-screen bg-neutral-50 p-4 md:p-8">
-    <div className="mx-auto max-w-6xl">
+  <div className="mx-auto max-w-6xl relative z-0">
       <Row className="justify-between gap-4 mb-4 relative z-30">
         <h1 className="text-2xl md:text-3xl font-bold">
           Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
@@ -619,9 +620,9 @@ return (
 
       {/* Tabs header */}
       <div
-        className="grid grid-cols-3 rounded-xl overflow-hidden mb-3 sticky top-16 z-10"
-        style={{ background: PRIMARY_BLUE }}
-      >
+  className="grid grid-cols-3 rounded-none overflow-hidden mb-3 sticky top-0 z-50 shadow-sm isolate"
+  style={{ background: PRIMARY_BLUE }}
+>
         {[
           { id: "builder", label: "Builder" },
           { id: "slip", label: "Betslip" },
@@ -630,7 +631,9 @@ return (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`py-2.5 text-sm ${tab === t.id ? "bg-white text-[#0a58ff]" : "text-white"}`}
+            className={`py-2.5 text-sm ${tab === t.id
+  ? "bg-white text-[#0a58ff] border-b-4 border-[#ffd200]"
+  : "text-white"}`}
           >
             {t.label}
           </button>
@@ -843,7 +846,7 @@ return (
 // -------------------- Subcomponents --------------------
 function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMarket, onAddLeg, onRemoveLeg, onUpdateLeg, onToggleSelect, selected }) {
   return (
-    <Card variant="plain" style={{ background: LIGHT_BLUE_BG }}>
+    <Card variant="plain" className="relative z-0" style={{ background: LIGHT_BLUE_BG }}>
       <CardContent className="p-0">
         <div className="flex items-center justify-between p-4">
           <h2 className="text-lg font-semibold">Markets</h2>
@@ -879,7 +882,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {m.legs.map((l) => (
-                    <div key={l.id} className={`rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between ${selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""}`}>
+                    <div key={l.id} className={`rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between relative z-0 ${selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""}`}>
                       <div className="flex-1 pr-2">
                         <div className="text-sm font-medium">{l.label}</div>
                         <div className="text-xs text-neutral-600">Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}</div>
