@@ -965,6 +965,18 @@ function BetSlip({
 
   const myBets = Array.isArray(bets) ? bets.filter(b => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey) : [];
 
+  // Small-betslip (builder tab) visual toggle
+const isSmallYellow = !wide && tint === "yellow";
+
+// Reusable tile styles: small betslip = no border + faint shadow, else keep existing border
+const tileClass = isSmallYellow
+  ? "rounded-2xl bg-white shadow-sm p-3"
+  : "rounded-2xl border p-3 bg-white";
+
+const sectionClass = isSmallYellow
+  ? "rounded-2xl bg-white shadow-sm p-3"
+  : "rounded-2xl border p-3 bg-white";
+
     return (
     <Card
       variant="plain"
@@ -990,7 +1002,7 @@ function BetSlip({
         ) : (
           <div className="space-y-3">
             {selectedLegs.map((l) => (
-              <div key={l.id} className="border rounded-2xl p-3 flex items-start justify-between gap-2">
+              <div key={l.id} className={`${tileClass} flex items-start justify-between gap-2`}>
                 <div className="flex-1">
                   <div className="text-xs text-neutral-500">{l.marketName}</div>
                   <div className="text-sm font-medium">{l.label}</div>
@@ -1023,7 +1035,7 @@ function BetSlip({
             ))}
 
             {mode === "multi" ? (
-              <div className="rounded-2xl border p-3 bg-white">
+              <div className={sectionClass}>
                 <Row className="justify-between mb-2">
                   <div className="text-sm font-semibold">Multi Builder</div>
                 </Row>
@@ -1055,7 +1067,7 @@ function BetSlip({
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border p-3 bg-white">
+              <div className={sectionClass}>
                 <Row className="justify-between mb-2">
                   <div className="text-sm font-semibold">Singles Summary</div>
                   <Badge>{selectedLegs.length} legs</Badge>
