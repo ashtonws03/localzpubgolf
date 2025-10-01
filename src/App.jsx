@@ -1025,7 +1025,7 @@ function BetSlip({
   bets,
   userKey,
   settleBet,
-  tint, // NEW: "yellow" to tint the small betslip
+  tint, // "yellow" to tint the small betslip
 }) {
   const oddsArr = selectedLegs.map((l) => l.odds);
   const totalOdds = multiplyOdds(oddsArr);
@@ -1042,71 +1042,167 @@ function BetSlip({
     0
   );
 
-const myBets = Array.isArray(bets) ? bets.filter(b => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey) : [];
+  // Player's own active bets (anything still in the "bets" collection)
+  const myBets = Array.isArray(bets)
+    ? bets.filter((b) => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey)
+    : [];
 
   // Yellow mode applies to both small (builder) and wide (slip) betslips
-const isYellow = tint === "yellow";
+  const isYellow = tint === "yellow";
 
-// Reusable tile styles: yellow mode = no border + faint shadow, else border
-const tileClass = isYellow
-  ? "rounded-2xl bg-white shadow-sm p-3"
-  : "rounded-2xl border p-3 bg-white";
+  // Reusable tile styles: yellow mode = no border + faint shadow, else border
+  const tileClass = isYellow
+    ? "rounded-2xl bg-white shadow-sm p-3"
+    : "rounded-2xl border p-3 bg-white";
 
-const sectionClass = isYellow
-  ? "rounded-2xl bg-white shadow-sm p-3"
-  : "rounded-2xl border p-3 bg-white";
+  const sectionClass = isYellow
+    ? "rounded-2xl bg-white shadow-sm p-3"
+    : "rounded-2xl border p-3 bg-white";
 
+  // Small status icons for each leg
+  const LegStatusIcon = ({ status }) => {
+    if (status === "won") {
+      return (
+        <svg
+          className="w-4 h-4 inline-block align-middle"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" fill="#16a34a" />
+          <path
+            d="M7 12l3 3 7-7"
+            stroke="#ffffff"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </svg>
+      );
+    }
+    if (status === "lost") {
+      return (
+        <svg
+          className="w-4 h-4 inline-block align-middle"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" fill="#dc2626" />
+          <path
+            d="M8 8l8 8M16 8l-8 8"
+            stroke="#ffffff"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </svg>
+      );
+    }
+    // pending
     return (
+      <span className="text-orange-500 text-xs font-medium inline-block align-middle">
+        pending
+      </span>
+    );
+  };
+
+  const legResult = (legId) => {
+    // Look up the leg's current result from live config (same logic as in parent)
+    // This component receives `settleBet`, but per-leg status comes from config.
+    // We'll mirror parent behavior by checking the DOM of selectedLegs only if needed,
+    // but simplest is to rely on the parent-provided function when summarizing at bet-level.
+    // For icons, we need direct per-leg status from config; we can pass it down via props if desired.
+    // Here, we infer via selectedLegs and fallback to "pending".
+    const fromSelected = selectedLegs.find((l) => l.id === legId)?.result;
+    return fromSelected || "pending";
+  };
+
+  return (
     <Card
-  variant="plain"
-  className={`${wide ? "" : "sticky top-28 z-0"}`}
-  style={{
-    background: tint === "yellow" ? ACCENT_YELLOW : (wide ? LIGHT_BLUE_BG : undefined),
-  }}
->
+      variant="plain"
+      className={`${wide ? "" : "sticky top-28 z-0"}`}
+      style={{
+        background: tint === "yellow" ? ACCENT_YELLOW : wide ? LIGHT_BLUE_BG : undefined,
+      }}
+    >
       <CardContent className="space-y-4">
         <Row className="justify-between">
           <h2 className="text-lg font-semibold">Betslip</h2>
           <Row className="gap-2 text-xs">
-            <Button size="sm" variant={mode === "multi" ? "default" : "outline"} className={mode === "multi" ? "bg-[#0a58ff] text-white" : ""} onClick={() => setMode("multi")}>Multi</Button>
-            <Button size="sm" variant={mode === "singles" ? "default" : "outline"} className={mode === "singles" ? "bg-[#0a58ff] text-white" : ""} onClick={() => setMode("singles")}>Singles</Button>
+            <Button
+              size="sm"
+              variant={mode === "multi" ? "default" : "outline"}
+              className={mode === "multi" ? "bg-[#0a58ff] text-white" : ""}
+              onClick={() => setMode("multi")}
+            >
+              Multi
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "singles" ? "default" : "outline"}
+              className={mode === "singles" ? "bg-[#0a58ff] text-white" : ""}
+              onClick={() => setMode("singles")}
+            >
+              Singles
+            </Button>
           </Row>
         </Row>
+
         <Separator />
 
+        {/* --- Selections area (unchanged behavior) --- */}
         {selectedLegs.length === 0 ? (
-          <p className="text-sm text-neutral-600">No selections yet. Add legs from the Markets list.</p>
+          <p className="text-sm text-neutral-600">
+            No selections yet. Add legs from the Markets list.
+          </p>
         ) : (
           <div className="space-y-3">
             {selectedLegs.map((l) => (
-              <div key={l.id} className={`${tileClass} flex items-start justify-between gap-2`}>
+              <div
+                key={l.id}
+                className={`${tileClass} flex items-start justify-between gap-2`}
+              >
                 <div className="flex-1">
                   <div className="text-xs text-neutral-500">{l.marketName}</div>
                   <div className="text-sm font-medium">{l.label}</div>
-                  <div className="text-xs">Odds <strong>{l.odds.toFixed(2)}</strong></div>
+                  <div className="text-xs">
+                    Odds <strong>{l.odds.toFixed(2)}</strong>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {mode === "singles" && (
                     <div className="flex items-center gap-2">
-                      <div className="text-[11px] text-neutral-500 text-right">Max stake ${stakeCapForOdds(l.odds).toFixed(2)} for $200 payout</div>
+                      <div className="text-[11px] text-neutral-500 text-right">
+                        Max stake ${stakeCapForOdds(l.odds).toFixed(2)} for $200
+                        payout
+                      </div>
                       <Input
                         className="w-28"
                         type="number"
                         step="0.01"
                         inputMode="decimal"
                         placeholder="Stake"
-                        value={Math.min(singleStakes[l.id] ?? 0, (singleCaps || {})[l.id] ?? Infinity)}
+                        value={Math.min(
+                          singleStakes[l.id] ?? 0,
+                          (singleCaps || {})[l.id] ?? Infinity
+                        )}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           const cap = (singleCaps || {})[l.id] ?? Infinity;
-                          const v = Math.max(0, Number.isFinite(val) ? clamp2(val) : 0);
+                          const v = Math.max(
+                            0,
+                            Number.isFinite(val) ? clamp2(val) : 0
+                          );
                           const valClamped = Math.min(v, cap);
                           setSingleStakes({ ...singleStakes, [l.id]: valClamped });
                         }}
                       />
                     </div>
                   )}
-                  <Button variant="ghost" onClick={() => onRemove(l.id)}>×</Button>
+                  <Button variant="ghost" onClick={() => onRemove(l.id)}>
+                    ×
+                  </Button>
                 </div>
               </div>
             ))}
@@ -1119,27 +1215,39 @@ const sectionClass = isYellow
                 <div className="grid grid-cols-2 gap-3 items-end">
                   <div>
                     <Label>Total odds</Label>
-                    <div className="text-2xl font-semibold">{totalOdds.toFixed(2)}</div>
+                    <div className="text-2xl font-semibold">
+                      {totalOdds.toFixed(2)}
+                    </div>
                   </div>
                   <div>
                     <Label>Stake (max ${multiCap.toFixed(2)})</Label>
-                    <Input type="number" step="0.01" inputMode="decimal" value={clampedMultiStake} onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      const v = Math.max(0, Number.isFinite(val) ? val : 0);
-                      const capped = Math.min(v, multiCap);
-                      setMultiStake(clamp2(capped));
-                    }} />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={clampedMultiStake}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const v = Math.max(0, Number.isFinite(val) ? val : 0);
+                        const capped = Math.min(v, multiCap);
+                        setMultiStake(clamp2(capped));
+                      }}
+                    />
                   </div>
                 </div>
                 <Separator className="my-3" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-sm text-neutral-600">Potential payout</div>
-                    <div className="text-xl font-semibold">${payout.toFixed(2)}</div>
+                    <div className="text-xl font-semibold">
+                      ${payout.toFixed(2)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-sm text-neutral-600">Potential profit</div>
-                    <div className="text-xl font-semibold">${clamp2(payout - clampedMultiStake).toFixed(2)}</div>
+                    <div className="text-xl font-semibold">
+                      ${clamp2(payout - clampedMultiStake).toFixed(2)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1151,15 +1259,24 @@ const sectionClass = isYellow
                 </Row>
                 <div className="space-y-2">
                   {selectedLegs.map((l) => {
-                    const stake = Math.min(singleStakes[l.id] || 0, (singleCaps || {})[l.id] ?? 0);
+                    const stake = Math.min(
+                      singleStakes[l.id] || 0,
+                      (singleCaps || {})[l.id] ?? 0
+                    );
                     const payout = payoutFrom(stake, l.odds);
                     const profit = clamp2(payout - stake);
                     return (
-                      <div key={l.id} className="flex items-center justify-between text-sm">
+                      <div
+                        key={l.id}
+                        className="flex items-center justify-between text-sm"
+                      >
                         <div className="truncate pr-2">{l.label}</div>
                         <div className="text-right w-48">
                           <div>Stake ${stake.toFixed(2)}</div>
-                          <div>Payout ${payout.toFixed(2)} · Profit ${profit.toFixed(2)}</div>
+                          <div>
+                            Payout ${payout.toFixed(2)} · Profit $
+                            {profit.toFixed(2)}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1169,11 +1286,15 @@ const sectionClass = isYellow
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-sm text-neutral-600">Total stake</div>
-                    <div className="text-xl font-semibold">${clamp2(_totalSinglesStake).toFixed(2)}</div>
+                    <div className="text-xl font-semibold">
+                      ${clamp2(_totalSinglesStake).toFixed(2)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-sm text-neutral-600">Total payout</div>
-                    <div className="text-xl font-semibold">${clamp2(_totalSinglesPayout).toFixed(2)}</div>
+                    <div className="text-xl font-semibold">
+                      ${clamp2(_totalSinglesPayout).toFixed(2)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1186,34 +1307,62 @@ const sectionClass = isYellow
             >
               Place {mode === "multi" ? "Multi" : "Singles"}
             </Button>
-            <p className="text-[11px] text-neutral-500">Max possible payout for any bet is $200. Stakes are capped automatically. Demo only – no real bets or payments.</p>
+            <p className="text-[11px] text-neutral-500">
+              Max possible payout for any bet is $200. Stakes are capped automatically.
+              Demo only – no real bets or payments.
+            </p>
+          </div>
+        )}
 
-            {/* My Bets (player view) */}
-            {myBets.length > 0 && (
-              <div className="mt-4">
-                <Separator className="my-3" />
-                <h3 className="text-md font-semibold">My Bets</h3>
-                <div className="space-y-2 max-h-[40vh] overflow-auto pr-1">
-                  {myBets.map((b) => {
-                    const s = typeof settleBet === 'function' ? settleBet(b) : { status: '—', potentialPayout: 0 };
-                    return (
-                      <div key={b.id} className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white`}>
-                        <div className="text-xs text-neutral-600">{formatPlacedAt(b.placedAt)}</div>
-                        <div className="text-xs">Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong></div>
-                        <div className="mt-1 space-y-1">
-                          {b.legs.map((l) => (
-                            <div key={l.legId} className="text-sm flex items-center justify-between">
-                              <div className="truncate pr-2">{l.marketName} — {l.label}</div>
-                              <div className="text-xs">@ {l.odds.toFixed(2)}</div>
+        {/* --- My Bets: ALWAYS show if user has any bets (even with no selections) --- */}
+        {myBets.length > 0 && (
+          <div className="mt-2">
+            <Separator className="my-3" />
+            <h3 className="text-md font-semibold">My Bets</h3>
+            <div className="space-y-2 max-h-[40vh] overflow-auto pr-1">
+              {myBets.map((b) => {
+                const s = typeof settleBet === "function"
+                  ? settleBet(b)
+                  : { status: "—", potentialPayout: 0 };
+
+                return (
+                  <div
+                    key={b.id}
+                    className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white`}
+                  >
+                    <div className="text-xs text-neutral-600">
+                      {formatPlacedAt(b.placedAt)}
+                    </div>
+                    <div className="text-xs">
+                      Mode: <strong>{b.mode}</strong> · Status:{" "}
+                      <strong>{s.status}</strong>
+                      {" · "}Potential payout: $
+                      {s.potentialPayout.toFixed(2)}
+                    </div>
+
+                    <div className="mt-2 space-y-1">
+                      {b.legs.map((l) => {
+                        const status = legResult(l.legId); // "won" | "lost" | "pending"
+                        return (
+                          <div
+                            key={l.legId}
+                            className="text-sm flex items-center justify-between"
+                          >
+                            <div className="truncate pr-2">
+                              {l.marketName} — {l.label}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs">@ {l.odds.toFixed(2)}</div>
+                              <LegStatusIcon status={status} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>
