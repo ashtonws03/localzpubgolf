@@ -1,4 +1,4 @@
-import { collection, addDoc, query, orderBy, onSnapshot, doc, setDoc } from "firebase/firestore";
+import { collection, doc, addDoc, setDoc, getDocs, deleteDoc, writeBatch, query, orderBy, onSnapshot, serverTimestamp, documentId } from "firebase/firestore";
 import { db } from "./firebase";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
@@ -30,11 +30,15 @@ const multiplyOdds = (odds) => clamp2(odds.reduce((a, v) => a * (v || 1), 1));
 const payoutFrom = (stake, odds) => clamp2((stake || 0) * (odds || 1));
 const stakeCapForOdds = (odds) => clamp2(Math.max(0, Math.floor((MAX_PAYOUT / Math.max(odds, 1.0000001)) * 100) / 100));
 const makeUserKey = (name = "", email = "") => `${name}`.trim().toLowerCase() + "|" + `${email}`.trim().toLowerCase();
+const formatPlacedAt = (ts) => {
+  // Handles both Firestore Timestamp and legacy number
+  if (ts && typeof ts.toDate === "function") return ts.toDate().toLocaleString();
+  if (typeof ts === "number") return new Date(ts).toLocaleString();
+  return "—";
+};
 
 // Storage keys
-const LS_KEY = "betbuilder_config_v2";
 const LS_BETSLIP = "betbuilder_betslip_v2";
-const LS_BETS = "betbuilder_bets_v2";
 const LS_USER = "betbuilder_user_v2";
 const LS_ADMIN = "betbuilder_admin_v2";
 
@@ -93,16 +97,40 @@ const Card = ({ className = "", children }) => (
 const CardContent = ({ className = "", children }) => (
   <div className={`p-4 ${className}`}>{children}</div>
 );
-const Button = ({ className = "", variant = "default", size = "md", type = "button", ...props }) => {
-  const base = "inline-flex items-center justify-center rounded-xl font-medium transition-colors focus:outline-none px-4";
-  const sizes = { sm: "h-9 text-sm px-3", md: "h-11", lg: "h-12 text-lg" };
-  const variants = {
-    default: "bg-black text-white hover:opacity-90",
-    outline: "border bg-white hover:bg-neutral-50",
-    ghost: "bg-transparent hover:bg-neutral-100",
-    destructive: "bg-red-600 text-white hover:bg-red-700",
+const Button = ({
+  className = "",
+  variant = "default",
+  size = "md",
+  type = "button",
+  ...props
+}) => {
+  const base =
+    "inline-flex items-center justify-center rounded-xl font-medium " +
+    "transition-colors transition-transform shadow-sm " +
+    "focus:outline-none focus:ring-2 focus:ring-[#0a58ff]/30 " +
+    "active:translate-y-[1px] active:scale-[.98] active:opacity-90 " +
+    "disabled:opacity-60 disabled:cursor-not-allowed px-4";
+
+  const sizes = {
+    sm: "h-9 text-sm px-3",
+    md: "h-11",
+    lg: "h-12 text-lg",
   };
-  return <button type={type} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...props} />;
+
+  const variants = {
+    default: "bg-black text-white hover:opacity-90 active:opacity-80",
+    outline: "border bg-white hover:bg-neutral-50 active:bg-neutral-100",
+    ghost: "bg-transparent hover:bg-neutral-100 active:bg-neutral-200",
+    destructive: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
+  };
+
+  return (
+    <button
+      type={type}
+      className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
+      {...props}
+    />
+  );
 };
 const Input = React.forwardRef((props, ref) => <input ref={ref} {...props} className={`h-11 px-3 rounded-xl border w-full ${props.className || ""}`} />);
 const Label = ({ children, className = "" }) => <label className={`text-sm text-neutral-700 ${className}`}>{children}</label>;
@@ -139,9 +167,7 @@ export default function BetBuilderApp() {
 const [config, setConfig] = useState(defaultConfig);
 
 // Bets (local init; Firestore subscription will overwrite after first snapshot)
-const [bets, setBets] = useState(() => {
-  try { return JSON.parse(localStorage.getItem(LS_BETS) || "[]"); } catch { return []; }
-});
+const [bets, setBets] = useState([]);
 
 // Betslip (which legs are currently selected by the player)
 const [slip, setSlip] = useState(() => {
@@ -167,6 +193,10 @@ useEffect(() => {
   return () => unsubscribe();
 }, []);
 
+useEffect(() => {
+  try { localStorage.removeItem("betbuilder_config_v2"); } catch {}
+}, []);
+
 // Persist the current local betslip so user's selections survive refresh
 useEffect(() => {
   localStorage.setItem(LS_BETSLIP, JSON.stringify(slip));
@@ -174,9 +204,13 @@ useEffect(() => {
 
 // Live-stream ALL bets from Firestore for Admin + players' "My Bets"
 useEffect(() => {
-  const q = query(collection(db, "bets"), orderBy("placedAt", "desc"));
+  const q = query(
+  collection(db, "bets"),
+  orderBy("placedAt", "desc"),
+  orderBy(documentId(), "desc") // tie-breaker for equal/pending timestamps
+);
   const unsubscribe = onSnapshot(q, (snapshot) => {
-    const allBets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const allBets = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
     setBets(allBets);
   });
   return () => unsubscribe();
@@ -194,12 +228,54 @@ useEffect(() => {
   }
 }, [showAdminModal]);
 
-// --- HELPERS ---
-// Save config to Firestore (use this instead of setConfig(...) in admin actions)
-const saveConfig = async (newConfig) => {
-  setConfig(newConfig);
-  await setDoc(doc(db, "config", "current"), newConfig);
+// --- ADMIN: Bets maintenance (no Auth; PIN-gated UI only) ---
+const deleteBet = async (betId) => {
+  try {
+    if (!isAdmin) return;
+    await deleteDoc(doc(db, "bets", betId));
+    toast.success("Bet deleted");
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to delete bet");
+  }
 };
+
+const clearAllBets = async () => {
+  try {
+    if (!isAdmin) return;
+    const ok = window.confirm("This will permanently delete ALL bets. Continue?");
+    if (!ok) return;
+    const snap = await getDocs(collection(db, "bets"));
+    const batch = writeBatch(db);
+    snap.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    toast.success("All bets cleared");
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to clear bets");
+  }
+};
+
+const archiveAndClearAllBets = async () => {
+  try {
+    if (!isAdmin) return;
+    const ok = window.confirm("Archive all bets to 'bets_archive' and clear current bets?");
+    if (!ok) return;
+    const snap = await getDocs(collection(db, "bets"));
+    const batch = writeBatch(db);
+    snap.forEach((d) => {
+      // copy to bets_archive with the same id, then delete original
+      batch.set(doc(db, "bets_archive", d.id), d.data());
+      batch.delete(d.ref);
+    });
+    await batch.commit();
+    toast.success("Bets archived and cleared");
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to archive & clear");
+  }
+};
+
 // Manual admin save/refresh helpers
 const [saving, setSaving] = useState(false);
 const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -248,7 +324,7 @@ const refreshFromCloud = () => {
   const totalSinglesPayout = selectedLegs.reduce((acc, l) => acc + payoutFrom(Math.min(singleStakes[l.id] || 0, singleCaps[l.id] || 0), l.odds), 0);
 
   // Admin: market editing
-  // Add a new market
+// Add a new market
 const addMarket = () => {
   const newConfig = {
     ...config,
@@ -257,7 +333,7 @@ const addMarket = () => {
       { id: uid(), name: "New Market", active: true, legs: [] },
     ],
   };
-  saveConfig(newConfig);
+  setConfig(newConfig);
 };
 
 // Remove a market
@@ -266,7 +342,7 @@ const removeMarket = (marketId) => {
     ...config,
     markets: config.markets.filter((m) => m.id !== marketId),
   };
-  saveConfig(newConfig);
+  setConfig(newConfig);
 };
 
 // Update a market (rename, toggle active, etc.)
@@ -277,7 +353,7 @@ const updateMarket = (marketId, patch) => {
       m.id === marketId ? { ...m, ...patch } : m
     ),
   };
-  saveConfig(newConfig);
+  setConfig(newConfig);
 };
 
 // Add a leg to a market
@@ -296,7 +372,7 @@ const addLeg = (marketId) => {
         : m
     ),
   };
-  saveConfig(newConfig);
+  setConfig(newConfig);
 };
 
 // Remove a leg
@@ -309,8 +385,7 @@ const removeLeg = (marketId, legId) => {
         : m
     ),
   };
-  saveConfig(newConfig);
-  // also remove it from the current slip if selected
+  setConfig(newConfig);
   setSlip((ids) => ids.filter((id) => id !== legId));
 };
 
@@ -329,7 +404,7 @@ const updateLeg = (marketId, legId, patch) => {
         : m
     ),
   };
-  saveConfig(newConfig);
+  setConfig(newConfig);
 };
 
   // Place bet
@@ -351,12 +426,11 @@ const updateLeg = (marketId, legId, patch) => {
   }));
 
   const betRecord = {
-    id: uid(),
     userName,
     userEmail,
     userKey,
     legs: legsSnap,
-    placedAt: Date.now(),
+    placedAt: serverTimestamp(),
     mode,
     ...(mode === "multi"
       ? { multiStake: clamp2(multiStake) }
@@ -364,12 +438,20 @@ const updateLeg = (marketId, legId, patch) => {
   };
 
   try {
-    await addDoc(collection(db, "bets"), betRecord);
-    toast.success("Bet saved to cloud!");
-  } catch (e) {
-    console.error("Error adding bet:", e);
-    toast.error("Failed to save bet");
-  }
+  await addDoc(collection(db, "bets"), betRecord);
+  toast.success("Bet saved to cloud!");
+
+  // Clear the slip after a successful bet
+  setSlip([]);
+  setSingleStakes({});
+  setMultiStake(10);
+  try { localStorage.removeItem(LS_BETSLIP); } catch {}
+  // Optional: jump to the slip tab to show the empty/confirmation state
+  // setTab("slip");
+} catch (e) {
+  console.error("Error adding bet:", e);
+  toast.error("Failed to save bet");
+}
 };
 
   // Leg result lookup and settlement
@@ -387,7 +469,7 @@ const updateLeg = (marketId, legId, patch) => {
       const anyPending = legs.some((l) => legResult(l.legId) === "pending");
       const anyLost = legs.some((l) => legResult(l.legId) === "lost");
       const anyWon = legs.some((l) => legResult(l.legId) === "won");
-      const status = anyPending ? "Pending" : anyWon && !anyLost ? "Won" : anyWon && anyLost ? "Won" : "Lost";
+      const status = anyPending ? "Pending" : (anyLost && anyWon) ? "Mixed" : anyLost ? "Lost" : anyWon ? "Won" : "Pending";
       const potential = legs.reduce((acc, l) => acc + payoutFrom((bet.stakesByLeg || {})[l.legId] || 0, l.odds), 0);
       return { status, potentialPayout: potential };
     }
@@ -557,22 +639,24 @@ return (
       )}
     </div>
     <div className="ml-auto flex items-center gap-2">
-      <button
-        className="h-10 px-4 rounded-xl text-sm font-medium border bg-[#ffd200] text-black hover:opacity-90 disabled:opacity-60"
-        onClick={forceSave}
-        disabled={saving}
-        title="Write current markets/legs/odds to Firestore"
-      >
-        {saving ? "Saving…" : "Save changes"}
-      </button>
-      <button
-        className="h-10 px-4 rounded-xl text-sm font-medium border bg-white hover:bg-neutral-50"
-        onClick={refreshFromCloud}
-        title="Reload latest config from Firestore"
-      >
-        Refresh from cloud
-      </button>
-    </div>
+  <Button
+    className="h-10 text-sm font-medium bg-[#ffd200] text-black hover:opacity-90 disabled:opacity-60"
+    onClick={forceSave}
+    disabled={saving}
+    title="Write current markets/legs/odds to Firestore"
+  >
+    {saving ? "Saving…" : "Save changes"}
+  </Button>
+
+  <Button
+    variant="outline"
+    className="h-10 text-sm font-medium bg-white hover:bg-neutral-50"
+    onClick={refreshFromCloud}
+    title="Reload latest config from Firestore"
+  >
+    Refresh from cloud
+  </Button>
+</div>
   </div>
 )}
 
@@ -588,7 +672,6 @@ return (
                   <p className="text-sm text-neutral-600">Edit the name of the game/competition users are betting on.</p>
                   <div className="grid md:grid-cols-3 gap-2 items-center">
                     <Label className="md:col-span-1">Title</Label>
-                    {/* IMPORTANT: use saveConfig, not setConfig, so edits sync to Firestore */}
                     <Input
                       className="md:col-span-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus-visible:outline-none"
                       value={config.eventTitle}
@@ -663,6 +746,22 @@ return (
       {tab === "admin" && isAdmin && (
         <div className="mt-4 grid md:grid-cols-3 gap-4">
           <div className="md:col-span-2 space-y-4">
+            <div className="md:col-span-2">
+  <Card>
+    <CardContent className="flex flex-wrap gap-2">
+      <Button
+        variant="outline"
+        onClick={archiveAndClearAllBets}
+        style={{ borderColor: "#0a58ff" }}
+      >
+        Archive & Clear All Bets
+      </Button>
+      <Button variant="destructive" onClick={clearAllBets}>
+        Clear All Bets
+      </Button>
+    </CardContent>
+  </Card>
+</div>
             <Card>
               <CardContent className="space-y-3">
                 <h2 className="text-lg font-semibold">Settle Legs</h2>
@@ -671,7 +770,7 @@ return (
                 </p>
                 <Separator />
                 <div className="space-y-4">
-                  {config.markets.map((m) => (
+                  {(config.markets ?? []).map((m) => (
                     <div key={m.id}>
                       <div className="font-medium mb-2">{m.name}</div>
                       <div className="space-y-2">
@@ -719,7 +818,7 @@ return (
             </Card>
           </div>
           <div className="md:col-span-1 space-y-4">
-            <AdminBetsPanel bets={bets} settleBet={settleBet} />
+            <AdminBetsPanel bets={bets} settleBet={settleBet} onDeleteBet={deleteBet} />
           </div>
         </div>
       )}
@@ -742,7 +841,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
         </div>
         <Separator />
         <div className="p-2">
-          {config.markets.map((m) => (
+          {(config.markets ?? []).map((m) => (
             <details key={m.id} className="border-b py-2" open>
               <summary className="px-2 py-2 rounded-md cursor-pointer hover:bg-[#0a58ff]/5 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -780,7 +879,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                             </div>
                             <div className="w-full">
                               <Label className="text-xs text-neutral-600">Odds</Label>
-                              <Input className="w-full text-sm h-11" type="number" step="0.01" inputMode="decimal" value={l.odds} onChange={(e) => updateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })} />
+                              <Input className="w-full text-sm h-11" type="number" step="0.01" inputMode="decimal" value={l.odds} onChange={(e) => onUpdateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })} />
                             </div>
                             <div className="w-full">
                               <Label className="text-xs text-neutral-600">Status</Label>
@@ -837,7 +936,6 @@ function BetSlip({
   const totalOdds = multiplyOdds(oddsArr);
   const clampedMultiStake = Math.min(multiStake, multiCap);
   const payout = payoutFrom(clampedMultiStake, totalOdds);
-  const profit = clamp2(payout - clampedMultiStake);
 
   // Singles totals (local)
   const _totalSinglesStake = selectedLegs.reduce(
@@ -983,7 +1081,7 @@ function BetSlip({
                     const s = typeof settleBet === 'function' ? settleBet(b) : { status: '—', potentialPayout: 0 };
                     return (
                       <div key={b.id} className="border rounded-2xl p-3">
-                        <div className="text-xs text-neutral-600">{new Date(b.placedAt).toLocaleString()}</div>
+                        <div className="text-xs text-neutral-600">{formatPlacedAt(b.placedAt)}</div>
                         <div className="text-xs">Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong></div>
                         <div className="mt-1 space-y-1">
                           {b.legs.map((l) => (
@@ -1006,7 +1104,7 @@ function BetSlip({
   );
 }
 
-function AdminBetsPanel({ bets, settleBet }) {
+function AdminBetsPanel({ bets, settleBet, onDeleteBet }) {
   return (
     <Card>
       <CardContent className="space-y-3">
@@ -1020,18 +1118,37 @@ function AdminBetsPanel({ bets, settleBet }) {
             bets.map((b) => {
               const s = settleBet(b);
               return (
-                <div key={b.id} className="border rounded-2xl p-3">
-                  <div className="text-sm"><strong>{b.userName}</strong>{b.userEmail ? ` · ${b.userEmail}` : ""}</div>
-                  <div className="text-xs text-neutral-600">{new Date(b.placedAt).toLocaleString()}</div>
-                  <Separator className="my-2" />
-                  <div className="text-xs">Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong> · Potential payout: ${s.potentialPayout.toFixed(2)}</div>
-                  <div className="mt-2 space-y-1">
-                    {b.legs.map((l) => (
-                      <div key={l.legId} className="text-sm flex items-center justify-between">
-                        <div className="truncate pr-2">{l.marketName} — {l.label}</div>
-                        <div className="text-xs">@ {l.odds.toFixed(2)}</div>
-                      </div>
-                    ))}
+               <div key={b.id} className="border rounded-2xl p-3">
+                 <div className="flex items-start justify-between">
+                   <div>
+                     <div className="text-sm">
+                       <strong>{b.userName}</strong>{b.userEmail ? ` · ${b.userEmail}` : ""}
+                     </div>
+                     <div className="text-xs text-neutral-600">{formatPlacedAt(b.placedAt)}</div>
+                   </div>
+                   <Button
+                     size="sm"
+                     variant="destructive"
+                     onClick={() => {
+                       if (confirm("Delete this bet? This cannot be undone.")) onDeleteBet?.(b.id);
+                     }}
+                   >
+                     Delete
+                   </Button>
+                 </div>
+    
+                 <Separator className="my-2" />
+                 <div className="text-xs">
+                   Mode: <strong>{b.mode}</strong> · Status: <strong>{s.status}</strong> · Potential payout: ${s.potentialPayout.toFixed(2)}
+                 </div>
+    
+                 <div className="mt-2 space-y-1">
+                   {b.legs.map((l) => (
+                     <div key={l.legId} className="text-sm flex items-center justify-between">
+                       <div className="truncate pr-2">{l.marketName} — {l.label}</div>
+                       <div className="text-xs">@ {l.odds.toFixed(2)}</div>
+                     </div>
+                   ))}
                   </div>
                 </div>
               );
