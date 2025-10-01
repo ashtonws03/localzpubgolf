@@ -23,6 +23,8 @@ const ACCESS_CODE = "LOCALZPG25";
 const ADMIN_PIN = "2855";
 const PRIMARY_BLUE = "#0a58ff";
 const ACCENT_YELLOW = "#ffd200";
+const LIGHT_BLUE_BG = "#eef4ff";     // subtle page-friendly blue
+const LIGHT_YELLOW_BG = "#fff7cc";   // gentle yellow for the small betslip
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clamp2 = (n) => (Number.isFinite(n) ? Number(n.toFixed(2)) : 0);
@@ -700,21 +702,23 @@ return (
 
           <div className="md:col-span-1">
             <BetSlip
-              mode={mode}
-              setMode={setMode}
-              selectedLegs={selectedLegs}
-              singleStakes={singleStakes}
-              setSingleStakes={setSingleStakes}
-              singleCaps={singleCaps}
-              multiStake={multiStake}
-              setMultiStake={setMultiStake}
-              multiCap={multiCap}
-              onRemove={(legId) => setSlip((prev) => prev.filter((id) => id !== legId))}
-              onPlace={placeBet}
-              bets={bets}
-              userKey={userKey}
-              settleBet={settleBet}
-            />
+  mode={mode}
+  setMode={setMode}
+  selectedLegs={selectedLegs}
+  singleStakes={singleStakes}
+  setSingleStakes={setSingleStakes}
+  singleCaps={singleCaps}
+  multiStake={multiStake}
+  setMultiStake={setMultiStake}
+  multiCap={multiCap}
+  onRemove={(legId) => setSlip((prev) => prev.filter((id) => id !== legId))}
+  onPlace={placeBet}
+  bets={bets}
+  userKey={userKey}
+  settleBet={settleBet}
+  tint="yellow"   // NEW: only the small builder betslip gets yellow
+/>
+
           </div>
         </div>
       )}
@@ -840,10 +844,10 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
           )}
         </div>
         <Separator />
-        <div className="p-2">
+        <div className="p-2 rounded-b-2xl" style={{ background: LIGHT_BLUE_BG }}>
           {(config.markets ?? []).map((m) => (
             <details key={m.id} className="border-b py-2" open>
-              <summary className="px-2 py-2 rounded-md cursor-pointer hover:bg-[#0a58ff]/5 flex items-center justify-between">
+              <summary className="px-2 py-2 rounded-md cursor-pointer hover:bg-[#0a58ff]/10 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{m.name}</span>
                   {m.active === false && <Badge className="bg-neutral-200 text-neutral-800">inactive</Badge>}
@@ -867,7 +871,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {m.legs.map((l) => (
-                    <div key={l.id} className={`rounded-2xl border p-3 flex items-center justify-between ${selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""}`}>
+                    <div key={l.id} className={`rounded-2xl border p-3 bg-white flex items-center justify-between ${selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""}`}>
                       <div className="flex-1 pr-2">
                         <div className="text-sm font-medium">{l.label}</div>
                         <div className="text-xs text-neutral-600">Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}</div>
@@ -931,6 +935,7 @@ function BetSlip({
   bets,
   userKey,
   settleBet,
+  tint, // NEW: "yellow" to tint the small betslip
 }) {
   const oddsArr = selectedLegs.map((l) => l.odds);
   const totalOdds = multiplyOdds(oddsArr);
@@ -950,7 +955,10 @@ function BetSlip({
   const myBets = Array.isArray(bets) ? bets.filter(b => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey) : [];
 
   return (
-    <Card className={`${wide ? "" : "sticky top-28 z-0"}`}>
+  <Card
+    className={`${wide ? "" : "sticky top-28 z-0"}`}
+    style={!wide && tint === "yellow" ? { background: LIGHT_YELLOW_BG } : undefined}
+  >
       <CardContent className="space-y-4">
         <Row className="justify-between">
           <h2 className="text-lg font-semibold">Betslip</h2>
