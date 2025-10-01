@@ -620,9 +620,9 @@ return (
 
       {/* Tabs header */}
       <div
-  className="grid grid-cols-3 rounded-none overflow-hidden mb-3 sticky top-0 z-50 shadow-sm isolate"
-  style={{ background: PRIMARY_BLUE }}
->
+        className={`grid ${isAdmin ? "grid-cols-3" : "grid-cols-2"} rounded-none overflow-hidden mb-3 sticky top-0 z-50 shadow-sm isolate`}
+        style={{ background: PRIMARY_BLUE }}
+      >
         {[
           { id: "builder", label: "Builder" },
           { id: "slip", label: "Betslip" },
@@ -631,12 +631,12 @@ return (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`py-2.5 text-sm ${tab === t.id
-  ? "bg-white text-[#0a58ff] border-b-4 border-[#ffd200]"
-  : "text-white"}`}
+            className={`py-2.5 text-sm w-full ${tab === t.id
+              ? "bg-white text-[#0a58ff] border-b-4 border-[#ffd200]"
+              : "text-white"}`}
           >
-            {t.label}
-          </button>
+           {t.label}
+         </button>
         ))}
       </div>
 
