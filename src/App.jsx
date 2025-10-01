@@ -910,19 +910,19 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                       </div>
                       <div className="flex items-center gap-2">
                         {!isAdmin && (
-  <Button
-    variant="default"
-    size="sm"
-    className={
-      selected.includes(l.id)
-        ? "bg-[#ffd200] text-black hover:bg-[#ffd200] hover:text-black"
-        : "bg-[#0a58ff] text-white hover:bg-[#ffd200] hover:text-black"
-    }
-    onClick={() => onToggleSelect(l.id)}
-  >
-    {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
-  </Button>
-)}
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className={
+                              selected.includes(l.id)
+                                ? "!bg-[#ffd200] !text-black hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
+                                : "!bg-[#0a58ff] !text-white hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
+                            }
+                            onClick={() => onToggleSelect(l.id)}
+                          >
+                            {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
+                          </Button>
+                        )}
                         {isAdmin && (
                           <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>Delete</Button>
                         )}
@@ -1107,12 +1107,12 @@ const sectionClass = isYellow
             )}
 
             <Button
-  variant="default"
-  className="w-full bg-[#0a58ff] text-white hover:bg-white hover:text-[#0a58ff] active:bg-[#0044cc] active:text-white active:translate-y-[1px]"
-  onClick={onPlace}
->
-  Place {mode === "multi" ? "Multi" : "Singles"}
-</Button>
+              variant="default"
+              className="w-full !bg-[#0a58ff] !text-white hover:!bg-white hover:!text-[#0a58ff] active:!bg-[#0044cc] active:!text-white active:translate-y-[1px] focus:ring-0 focus:outline-none"
+              onClick={onPlace}
+            >
+              Place {mode === "multi" ? "Multi" : "Singles"}
+            </Button>
             <p className="text-[11px] text-neutral-500">Max possible payout for any bet is $200. Stakes are capped automatically. Demo only – no real bets or payments.</p>
 
             {/* My Bets (player view) */}
