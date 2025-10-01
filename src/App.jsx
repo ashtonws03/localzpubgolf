@@ -287,6 +287,32 @@ const archiveAndClearAllBets = async () => {
   }
 };
 
+// Reset all legs in every market to "pending"
+const resetAllLegsToPending = async () => {
+  try {
+    if (!isAdmin) return;
+
+    const newConfig = {
+      ...config,
+      markets: (config.markets || []).map((m) => ({
+        ...m,
+        legs: (m.legs || []).map((l) => ({ ...l, result: "pending" })),
+      })),
+    };
+
+    // Update local state so UI reflects immediately
+    setConfig(newConfig);
+
+    // Persist to Firestore so everyone sees the change
+    await setDoc(doc(db, "config", "current"), newConfig);
+
+    toast.success("All legs have been reset to pending");
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to reset legs");
+  }
+};
+
 // Manual admin save/refresh helpers
 const [saving, setSaving] = useState(false);
 const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -658,24 +684,43 @@ return (
       )}
     </div>
     <div className="ml-auto flex items-center gap-2">
-  <Button
-    className="h-10 text-sm font-medium bg-[#ffd200] text-black hover:opacity-90 disabled:opacity-60"
-    onClick={forceSave}
-    disabled={saving}
-    title="Write current markets/legs/odds to Firestore"
-  >
-    {saving ? "Saving…" : "Save changes"}
-  </Button>
+      <Button
+        className="h-10 text-sm font-medium bg-[#ffd200] text-black hover:opacity-90 disabled:opacity-60"
+        onClick={forceSave}
+        disabled={saving}
+        title="Write current markets/legs/odds to Firestore"
+      >
+        {saving ? "Saving…" : "Save changes"}
+      </Button>
 
-  <Button
-    variant="outline"
-    className="h-10 text-sm font-medium bg-white hover:bg-neutral-50"
-    onClick={refreshFromCloud}
-    title="Reload latest config from Firestore"
-  >
-    Refresh from cloud
-  </Button>
-</div>
+      <Button
+        variant="outline"
+        className="h-10 text-sm font-medium bg-white hover:bg-neutral-50"
+        onClick={refreshFromCloud}
+        title="Reload latest config from Firestore"
+      >
+        Refresh from cloud
+      </Button>
+
+      {/* 🔹 NEW BUTTON: Reset all legs to Pending */}
+      <Button
+        variant="outline"
+        className="h-10 text-sm font-medium bg-white hover:bg-neutral-50"
+        onClick={() => {
+          const newConfig = {
+            ...config,
+            markets: config.markets.map(m => ({
+              ...m,
+              legs: m.legs.map(l => ({ ...l, result: "pending" }))
+            }))
+          };
+          setConfig(newConfig);
+          toast.success("All legs reset to pending");
+        }}
+      >
+        Reset all legs
+      </Button>
+    </div>
   </div>
 )}
 
