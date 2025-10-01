@@ -879,7 +879,7 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {m.legs.map((l) => (
-                    <div key={l.id} className={`rounded-2xl border p-3 bg-white flex items-center justify-between ${selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""}`}>
+                    <div key={l.id} className={`rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between ${selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""}`}>
                       <div className="flex-1 pr-2">
                         <div className="text-sm font-medium">{l.label}</div>
                         <div className="text-xs text-neutral-600">Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}</div>
@@ -966,11 +966,11 @@ function BetSlip({
     <Card
       variant="plain"
       className={`${wide ? "" : "sticky top-28 z-0"}`}
-      style={{
-        background: wide
-          ? LIGHT_BLUE_BG              // wide tab betslip = light blue
-          : (tint === "yellow" ? LIGHT_YELLOW_BG : undefined), // small builder betslip = yellow
-      }}
+          style={{
+      background: wide
+        ? LIGHT_BLUE_BG
+        : (tint === "yellow" ? ACCENT_YELLOW : undefined),  // now solid brand yellow
+    }}
     >
       <CardContent className="space-y-4">
         <Row className="justify-between">
