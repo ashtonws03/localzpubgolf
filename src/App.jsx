@@ -93,9 +93,17 @@ const Row = ({ className = "", children }) => (
 const Col = ({ className = "", children }) => (
   <div className={`flex flex-col ${className}`}>{children}</div>
 );
-const Card = ({ className = "", children }) => (
-  <div className={`rounded-2xl border bg-white shadow-sm ${className}`}>{children}</div>
-);
+const Card = ({ className = "", children, variant = "default", style }) => {
+  const chrome =
+    variant === "plain"
+      ? "rounded-2xl"                     // no border, no white bg, no shadow
+      : "rounded-2xl border bg-white shadow-sm";
+  return (
+    <div className={`${chrome} ${className}`} style={style}>
+      {children}
+    </div>
+  );
+};
 const CardContent = ({ className = "", children }) => (
   <div className={`p-4 ${className}`}>{children}</div>
 );
@@ -835,7 +843,7 @@ return (
 // -------------------- Subcomponents --------------------
 function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMarket, onAddLeg, onRemoveLeg, onUpdateLeg, onToggleSelect, selected }) {
   return (
-    <Card>
+    <Card variant="plain" style={{ background: LIGHT_BLUE_BG }}>
       <CardContent className="p-0">
         <div className="flex items-center justify-between p-4">
           <h2 className="text-lg font-semibold">Markets</h2>
@@ -954,11 +962,16 @@ function BetSlip({
 
   const myBets = Array.isArray(bets) ? bets.filter(b => (b.userKey || makeUserKey(b.userName, b.userEmail)) === userKey) : [];
 
-  return (
-  <Card
-    className={`${wide ? "" : "sticky top-28 z-0"}`}
-    style={!wide && tint === "yellow" ? { background: LIGHT_YELLOW_BG } : undefined}
-  >
+    return (
+    <Card
+      variant="plain"
+      className={`${wide ? "" : "sticky top-28 z-0"}`}
+      style={{
+        background: wide
+          ? LIGHT_BLUE_BG              // wide tab betslip = light blue
+          : (tint === "yellow" ? LIGHT_YELLOW_BG : undefined), // small builder betslip = yellow
+      }}
+    >
       <CardContent className="space-y-4">
         <Row className="justify-between">
           <h2 className="text-lg font-semibold">Betslip</h2>
