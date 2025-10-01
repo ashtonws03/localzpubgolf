@@ -911,12 +911,14 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
                       <div className="flex items-center gap-2">
                         {!isAdmin && (
                           <Button
-                            size="sm"
-                            className={selected.includes(l.id) ? "bg-[#0a58ff] text-white" : "bg-[#ffd200] text-black hover:opacity-90"}
-                            onClick={() => onToggleSelect(l.id)}
-                          >
-                            {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
-                          </Button>
+  size="sm"
+  className={selected.includes(l.id)
+    ? "bg-[#0a58ff] text-white hover:bg-[#0044cc] active:bg-[#003399] active:translate-y-[1px]"
+    : "bg-[#0a58ff] text-white hover:bg-[#0044cc] active:bg-[#003399] active:translate-y-[1px]"}
+  onClick={() => onToggleSelect(l.id)}
+>
+  {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
+</Button>
                         )}
                         {isAdmin && (
                           <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>Delete</Button>
@@ -1101,9 +1103,12 @@ const sectionClass = isYellow
               </div>
             )}
 
-            <Button style={{ background: PRIMARY_BLUE, color: "white" }} className="w-full" onClick={onPlace}>
-              Place {mode === "multi" ? "Multi" : "Singles"}
-            </Button>
+            <Button
+  className="w-full bg-[#0a58ff] text-white hover:bg-[#0044cc] active:bg-[#003399] active:translate-y-[1px]"
+  onClick={onPlace}
+>
+  Place {mode === "multi" ? "Multi" : "Singles"}
+</Button>
             <p className="text-[11px] text-neutral-500">Max possible payout for any bet is $200. Stakes are capped automatically. Demo only – no real bets or payments.</p>
 
             {/* My Bets (player view) */}
