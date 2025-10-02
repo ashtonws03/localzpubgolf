@@ -662,35 +662,57 @@ const updateLeg = (marketId, legId, patch) => {
           <CardContent className="space-y-4">
             <Row className="gap-2"><span className="text-xl font-semibold">Restricted Access</span></Row>
             <p className="text-sm text-neutral-600">Enter the access code to continue. Add your name (and optional email) so the admin can identify your bets.</p>
-            <Col className="gap-3">
-              <Col>
-                <Label>Access code</Label>
-                <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Enter code" />
-              </Col>
-              <Col>
-                <Label>Name (required)</Label>
-                <Input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Your name" />
-              </Col>
-              <Col>
-                <Label>Email (optional)</Label>
-                <Input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="you@example.com" />
-              </Col>
-              <Col>
-  <Label>Team name (required, case sensitive)</Label>
-  <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Exact team name" />
-</Col>
-              <Button
-  style={{ background: PRIMARY_BLUE, color: "white" }}
-  onClick={() => {
-    if (accessCode !== ACCESS_CODE) { toast.error("Incorrect access code"); return; }
-    if (!userName.trim()) { toast.error("Please enter your name"); return; }
-    if (!teamName.trim()) { toast.error("Enter your exact team name"); return; }
-    setAuthed(true);
-    toast.success("Welcome");
-  }}
->Enter</Button>
-              <p className="text-[11px] text-neutral-500">Demo only — no real betting or payments. Data stored locally.</p>
-            </Col>
+            {/* REPLACE the existing <Col className="gap-3">...</Col> with this */}
+<Row className="items-stretch gap-3">
+  {/* Left logo (hidden on very small screens to keep the card tidy) */}
+  <img
+    src="/assets/localz-5yr.png"
+    alt="Localz • 5 Years"
+    className="hidden sm:block h-24 w-auto shrink-0 self-center"
+    style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}
+  />
+
+  {/* Form column */}
+  <Col className="gap-3 flex-1 min-w-[260px]">
+    <Col>
+      <Label>Access code</Label>
+      <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Enter code" />
+    </Col>
+
+    <Col>
+      <Label>Name (required)</Label>
+      <Input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Your name" />
+    </Col>
+
+    <Col>
+      <Label>Team name (required, case sensitive)</Label>
+      <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Exact team name" />
+    </Col>
+
+    <Button
+      style={{ background: PRIMARY_BLUE, color: "white" }}
+      onClick={() => {
+        if (accessCode !== ACCESS_CODE) { toast.error("Incorrect access code"); return; }
+        if (!userName.trim()) { toast.error("Please enter your name"); return; }
+        if (!teamName.trim()) { toast.error("Enter your exact team name"); return; }
+        setUserEmail?.(""); // harmless if present
+        setAuthed(true);
+        toast.success("Welcome");
+      }}
+    >
+      Enter
+    </Button>
+    <p className="text-[11px] text-neutral-500">Demo only — no real betting or payments. Data stored locally.</p>
+  </Col>
+
+  {/* Right logo (hidden on very small screens) */}
+  <img
+    src="/assets/localz-5yr.png"
+    alt="Localz • 5 Years"
+    className="hidden sm:block h-24 w-auto shrink-0 self-center"
+    style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}
+  />
+</Row>
           </CardContent>
         </Card>
       </div>
@@ -775,10 +797,19 @@ return (
     <div className="mx-auto max-w-6xl relative z-0">
       {/* Header with in-flow handle (scrolls away like the title) */}
 <div className="relative mb-4 z-40">
-  <Row className="justify-between gap-4 pr-14"> {/* pr to give the handle room */}
-    <h1 className="text-2xl md:text-3xl font-bold">
-      Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
-    </h1>
+    {/* Header with logo + title */}
+  <Row className="justify-between gap-4 pr-14">
+    <Row className="items-center gap-3">
+      <img
+        src="/assets/localz-5yr.png"
+        alt="Localz • 5 Years"
+        className="h-10 w-auto md:h-12 shrink-0"
+        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))" }}
+      />
+      <h1 className="text-2xl md:text-3xl font-bold">
+        Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
+      </h1>
+    </Row>
   </Row>
 
   {/* Handle sits in the header, absolutely positioned; it will scroll away with the header.
@@ -886,85 +917,99 @@ return (
         </button>
       </div>
 
-      {/* Panel body */}
-      <div className="p-4 space-y-4" style={{ color: theme.textOnPanel }}>
-        <div className="text-xs opacity-90">
-          Signed in as{" "}
-          <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
-          {userEmail ? (
-            <span className="block break-all opacity-90">{userEmail}</span>
-          ) : null}
-        </div>
+            {/* Panel body (with bottom logo) */}
+      <div
+        className="p-4 flex flex-col min-h-[calc(100%-3rem)]"
+        style={{ color: theme.textOnPanel }}
+      >
+        {/* TOP CONTENT (unchanged) */}
+        <div className="space-y-4">
+          <div className="text-xs opacity-90">
+            Signed in as{" "}
+            <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
+            {userEmail ? (
+              <span className="block break-all opacity-90">{userEmail}</span>
+            ) : null}
+          </div>
 
-        {/* Logout */}
-        <Button
-          variant="outline"
-          className="w-full shadow-sm !border-0"
-          style={{
-            background: page === "golf" ? "#000" : "#fff",
-            color: page === "golf" ? "#fff" : "#000",
-          }}
-          onClick={handleLogout}
-        >
-          Log out
-        </Button>
+          {/* Logout */}
+          <Button
+            variant="outline"
+            className="w-full shadow-sm !border-0"
+            style={{
+              background: page === "golf" ? "#000" : "#fff",
+              color: page === "golf" ? "#fff" : "#000",
+            }}
+            onClick={handleLogout}
+          >
+            Log out
+          </Button>
 
-        {/* Go to Pub Golf / Bet Builder switch */}
-        <Button
-  className="w-full shadow-sm"
-  style={ page === "golf"
-    ? { background: PRIMARY_BLUE, color: "#ffffff" } // On golf page, “Back to Bet Builder” is BLUE
-    : { background: GOLD,          color: "#000000" } // On bet page, “Open Pub Golf” is GOLD
-  }
-  onClick={() => {
-    setMenuOpen(false);
-    setPage(page === "golf" ? "bet" : "golf"); // use "bet", not "builder"
-  }}
->
-  {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
-</Button>
-
-        {/* Admin actions */}
-        {!isAdmin ? (
+          {/* Go to Pub Golf / Bet Builder switch */}
           <Button
             className="w-full shadow-sm"
-            style={{ background: theme.buttonBg, color: theme.buttonText }}
+            style={
+              page === "golf"
+                ? { background: PRIMARY_BLUE, color: "#ffffff" }
+                : { background: GOLD, color: "#000000" }
+            }
             onClick={() => {
               setMenuOpen(false);
-              setShowAdminModal(true);
+              setPage(page === "golf" ? "bet" : "golf");
             }}
           >
-            Admin login
+            {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
           </Button>
-        ) : (
-          <div className="space-y-2">
-            <Badge
-              className="inline-block"
-              style={{
-                background: theme.brand,
-                color: theme.textOnBrand,
-              }}
-            >
-              Admin
-            </Badge>
+
+          {/* Admin actions */}
+          {!isAdmin ? (
             <Button
-              variant="outline"
-              className="w-full shadow-sm !border-0"
-              style={{
-                background: page === "golf" ? "#000" : "#fff",
-                color: page === "golf" ? "#fff" : "#000",
-              }}
+              className="w-full shadow-sm"
+              style={{ background: theme.buttonBg, color: theme.buttonText }}
               onClick={() => {
-                setIsAdmin(false);
-                localStorage.removeItem(LS_ADMIN);
                 setMenuOpen(false);
-                toast.success("Admin disabled");
+                setShowAdminModal(true);
               }}
             >
-              Turn off admin
+              Admin login
             </Button>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <Badge
+                className="inline-block"
+                style={{ background: theme.brand, color: theme.textOnBrand }}
+              >
+                Admin
+              </Badge>
+              <Button
+                variant="outline"
+                className="w-full shadow-sm !border-0"
+                style={{
+                  background: page === "golf" ? "#000" : "#fff",
+                  color: page === "golf" ? "#fff" : "#000",
+                }}
+                onClick={() => {
+                  setIsAdmin(false);
+                  localStorage.removeItem(LS_ADMIN);
+                  setMenuOpen(false);
+                  toast.success("Admin disabled");
+                }}
+              >
+                Turn off admin
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* BOTTOM LOGO (centered, spaced from edges) */}
+        <div className="mt-auto pt-6 pb-2">
+          <img
+            src="/assets/localz-5yr.png"
+            alt="Localz • 5 Years"
+            className="block mx-auto w-40 md:w-48 max-w-[80%]"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,.45))" }}
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -2391,80 +2436,99 @@ function PubGolfPage({
         </button>
       </div>
 
-      {/* Panel body */}
-      <div className="p-4 space-y-4" style={{ color: theme.textOnPanel }}>
-        <div className="text-xs opacity-90">
-          Signed in as <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
-          {userEmail ? (<span className="block break-all opacity-90">{userEmail}</span>) : null}
-        </div>
+            {/* Panel body (with bottom logo) */}
+      <div
+        className="p-4 flex flex-col min-h-[calc(100%-3rem)]"
+        style={{ color: theme.textOnPanel }}
+      >
+        {/* TOP CONTENT (unchanged) */}
+        <div className="space-y-4">
+          <div className="text-xs opacity-90">
+            Signed in as{" "}
+            <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
+            {userEmail ? (
+              <span className="block break-all opacity-90">{userEmail}</span>
+            ) : null}
+          </div>
 
-        {/* Logout */}
-        <Button
-          variant="outline"
-          className="w-full shadow-sm !border-0"
-          style={{ background: "#000", color: "#fff" }}
-          onClick={onLogout}
-        >
-          Log out
-        </Button>
+          {/* Logout */}
+          <Button
+            variant="outline"
+            className="w-full shadow-sm !border-0"
+            style={{ background: "#000", color: "#fff" }}
+            onClick={onLogout}
+          >
+            Log out
+          </Button>
 
-        {/* Back to Bet Builder (BLUE on the golf page) */}
-        <Button
-          className="w-full shadow-sm"
-          style={{ background: PRIMARY_BLUE, color: "#ffffff" }}
-          onClick={() => {
-            setMenuOpen(false);
-            setPage("bet");
-          }}
-        >
-          Back to Bet Builder
-        </Button>
-
-        {/* Admin actions */}
-        {!isAdmin ? (
+          {/* Back to Bet Builder */}
           <Button
             className="w-full shadow-sm"
-            style={{ background: "#000", color: "#ffffff" }}
+            style={{ background: PRIMARY_BLUE, color: "#ffffff" }}
             onClick={() => {
               setMenuOpen(false);
-              setShowAdminModal(true);
+              setPage("bet");
             }}
           >
-            Admin login
+            Back to Bet Builder
           </Button>
-        ) : (
-          <div className="space-y-2">
-            <Badge
-              className="inline-block"
-              style={{ background: theme.brand, color: theme.textOnBrand }}
-            >
-              Admin
-            </Badge>
+
+          {/* Admin actions */}
+          {!isAdmin ? (
             <Button
-              variant="outline"
-              className="w-full shadow-sm !border-0"
+              className="w-full shadow-sm"
               style={{ background: "#000", color: "#ffffff" }}
               onClick={() => {
-                setIsAdmin(false);
-                localStorage.removeItem(LS_ADMIN);
                 setMenuOpen(false);
-                toast.success("Admin disabled");
+                setShowAdminModal(true);
               }}
             >
-              Turn off admin
+              Admin login
             </Button>
-            <Button
-  className="w-full shadow-sm"
-  style={{ background: PUBGOLF_GOLD, color: "#000" }}
-  onClick={() => {
-    setMenuOpen(false);
-    onClearAllScores?.();
-  }}
->
-  Clear all scores (round)
-</Button>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <Badge
+                className="inline-block"
+                style={{ background: theme.brand, color: theme.textOnBrand }}
+              >
+                Admin
+              </Badge>
+              <Button
+                variant="outline"
+                className="w-full shadow-sm !border-0"
+                style={{ background: "#000", color: "#ffffff" }}
+                onClick={() => {
+                  setIsAdmin(false);
+                  localStorage.removeItem(LS_ADMIN);
+                  setMenuOpen(false);
+                  toast.success("Admin disabled");
+                }}
+              >
+                Turn off admin
+              </Button>
+              <Button
+                className="w-full shadow-sm"
+                style={{ background: PUBGOLF_GOLD, color: "#000" }}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onClearAllScores?.();
+                }}
+              >
+                Clear all scores (round)
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* BOTTOM LOGO (centered, spaced from edges) */}
+        <div className="mt-auto pt-6 pb-2">
+          <img
+            src="/assets/localz-5yr.png"
+            alt="Localz • 5 Years"
+            className="block mx-auto w-40 md:w-48 max-w-[80%]"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,.45))" }}
+          />
+        </div>
       </div>
     </div>
   </div>
