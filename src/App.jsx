@@ -26,6 +26,13 @@ const ACCENT_YELLOW = "#ffd200";
 const LIGHT_BLUE_BG = "#e6f0ff";     // stronger light blue (Sportsbet vibe)
 const LIGHT_YELLOW_BG = "#ffd200";   // solid yellow for small betslip
 const NAVY_TEXT = "#002147";         // deep navy for headings in tinted areas
+// -------------------- Constants & Helpers --------------------
+const PUBGOLF_GOLD = "#d4af37";
+const PUBGOLF_BLACK = "#0b0b0b";
+const PUBGOLF_PAPER = "#111316";
+const ROUND_ID = "cairns2025";
+
+const LS_PAGE = "betbuilder_current_page_v1";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clamp2 = (n) => (Number.isFinite(n) ? Number(n.toFixed(2)) : 0);
@@ -154,17 +161,29 @@ const Separator = ({ className = "" }) => <hr className={`border-neutral-200 ${c
 // -------------------- Main App --------------------
 export default function BetBuilderApp() {
   // Access state
-  const [authed, setAuthed] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").authed || false; } catch { return false; }
-  });
-  const [userName, setUserName] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").name || ""; } catch { return ""; }
-  });
-  const [userEmail, setUserEmail] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").email || ""; } catch { return ""; }
-  });
-  const [accessCode, setAccessCode] = useState("");
-  const userKey = useMemo(() => makeUserKey(userName, userEmail), [userName, userEmail]);
+const [authed, setAuthed] = useState(() => {
+  try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").authed || false; } catch { return false; }
+});
+const [userName, setUserName] = useState(() => {
+  try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").name || ""; } catch { return ""; }
+});
+const [userEmail, setUserEmail] = useState(() => {
+  try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").email || ""; } catch { return ""; }
+});
+const [teamName, setTeamName] = useState(() => {
+  try { return JSON.parse(localStorage.getItem(LS_USER) || "{}").teamName || ""; } catch { return ""; }
+});
+const [accessCode, setAccessCode] = useState("");
+
+// “page” switcher: "bet" | "golf"
+const [page, setPage] = useState(() => {
+  try { return localStorage.getItem(LS_PAGE) || "bet"; } catch { return "bet"; }
+});
+useEffect(() => {
+  try { localStorage.setItem(LS_PAGE, page); } catch {}
+}, [page]);
+
+const userKey = useMemo(() => makeUserKey(userName, userEmail), [userName, userEmail]);
 
   // Admin
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -230,10 +249,47 @@ useEffect(() => {
   return () => unsubscribe();
 }, []);
 
-// Persist the logged-in gate info (access code passed, name/email)
+// -------------------- Pub Golf state --------------------
+const defaultHoles = Array.from({ length: 9 }, (_, i) => ({
+  id: `h${i+1}`,
+  name: `Hole ${i+1}`,
+  active: true,
+}));
+
+const [golfConfig, setGolfConfig] = useState({ title: "Pub Golf 2025: Cairns", holes: defaultHoles });
+const [golfScores, setGolfScores] = useState([]);
+
+// Round config (golf_rounds/{ROUND_ID})
 useEffect(() => {
-  localStorage.setItem(LS_USER, JSON.stringify({ authed, name: userName, email: userEmail }));
-}, [authed, userName, userEmail]);
+  const roundRef = doc(db, "golf_rounds", ROUND_ID);
+  const unsub = onSnapshot(roundRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data();
+      setGolfConfig({
+        title: data.title || "Pub Golf 2025: Cairns",
+        holes: Array.isArray(data.holes) && data.holes.length ? data.holes : defaultHoles
+      });
+    } else {
+      setDoc(roundRef, { title: "Pub Golf 2025: Cairns", holes: defaultHoles });
+    }
+  });
+  return () => unsub();
+}, []);
+
+// Scores for this round (golf_scores, filtered in-state by roundId)
+useEffect(() => {
+  const qScores = query(collection(db, "golf_scores"), orderBy("updatedAt", "desc"));
+  const unsub = onSnapshot(qScores, (snap) => {
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.roundId === ROUND_ID);
+    setGolfScores(all);
+  });
+  return () => unsub();
+}, []);
+
+// Persist the logged-in gate info (access code passed, name/email/team)
+useEffect(() => {
+  localStorage.setItem(LS_USER, JSON.stringify({ authed, name: userName, email: userEmail, teamName }));
+}, [authed, userName, userEmail, teamName]);
 
 // Focus the PIN input when admin modal opens
 useEffect(() => {
@@ -542,15 +598,20 @@ const updateLeg = (marketId, legId, patch) => {
                 <Label>Email (optional)</Label>
                 <Input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="you@example.com" />
               </Col>
+              <Col>
+  <Label>Team name (required, case sensitive)</Label>
+  <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Exact team name" />
+</Col>
               <Button
-                style={{ background: PRIMARY_BLUE, color: "white" }}
-                onClick={() => {
-                  if (accessCode !== ACCESS_CODE) { toast.error("Incorrect access code"); return; }
-                  if (!userName.trim()) { toast.error("Please enter your name"); return; }
-                  setAuthed(true);
-                  toast.success("Welcome");
-                }}
-              >Enter</Button>
+  style={{ background: PRIMARY_BLUE, color: "white" }}
+  onClick={() => {
+    if (accessCode !== ACCESS_CODE) { toast.error("Incorrect access code"); return; }
+    if (!userName.trim()) { toast.error("Please enter your name"); return; }
+    if (!teamName.trim()) { toast.error("Enter your exact team name"); return; }
+    setAuthed(true);
+    toast.success("Welcome");
+  }}
+>Enter</Button>
               <p className="text-[11px] text-neutral-500">Demo only — no real betting or payments. Data stored locally.</p>
             </Col>
           </CardContent>
@@ -560,6 +621,18 @@ const updateLeg = (marketId, legId, patch) => {
   }
 
 // --- Main UI ---
+if (page === "golf") {
+  return (
+    <PubGolfPage
+      golfConfig={golfConfig}
+      teamName={teamName}
+      userName={userName}
+      scores={golfScores}
+    />
+  );
+}
+
+// else: original Bet Builder page continues as-is:
 return (
   <div className="min-h-screen bg-neutral-50 p-4 md:p-8">
     <div className="mx-auto max-w-6xl relative z-0">
@@ -674,6 +747,14 @@ return (
 
       {/* Panel body */}
       <div className="p-4 space-y-4">
+        {/* Page switcher */}
+<Button
+  className="w-full shadow-sm"
+  style={{ background: page === "golf" ? PRIMARY_BLUE : PUBGOLF_GOLD, color: page === "golf" ? "white" : "black" }}
+  onClick={() => { setPage(page === "golf" ? "bet" : "golf"); setMenuOpen(false); }}
+>
+  {page === "golf" ? "Back to Bet Builder" : "Go to Pub Golf 2025"}
+</Button>
         <div className="text-xs text-neutral-700">
           Signed in as{" "}
           <strong className="text-[#0a58ff]">{userName || "—"}</strong>
@@ -1685,6 +1766,239 @@ function AdminBetsPanel({ bets, settleBet, onDeleteBet }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+// ---------- Pub Golf helpers ----------
+function SpinNumber({ value, setValue, step=1, allowNegative=true, min, max }) {
+  const clamp = (n) => {
+    if (typeof min === "number") n = Math.max(min, n);
+    if (typeof max === "number") n = Math.min(max, n);
+    return n;
+  };
+  return (
+    <div className="inline-flex items-stretch overflow-hidden rounded-xl border bg-white">
+      <button className="px-3 text-lg" onClick={() => setValue(clamp((Number(value)||0) - step))}>–</button>
+      <input
+        className="w-16 text-center outline-none"
+        type="number"
+        step={step}
+        value={value ?? 0}
+        onChange={(e)=> {
+          const n = parseFloat(e.target.value);
+          if (!allowNegative && n < 0) return;
+          setValue(clamp(Number.isFinite(n) ? n : 0));
+        }}
+      />
+      <button className="px-3 text-lg" onClick={() => setValue(clamp((Number(value)||0) + step))}>+</button>
+    </div>
+  );
+}
+const teamHoleId = (roundId, team, holeId) => `${roundId}__${team}__${holeId}`;
+
+// ---------- Scorecard ----------
+function Scorecard({ roundId, golfConfig, teamName, userName }) {
+  const [editMap, setEditMap] = useState({});
+  const [local, setLocal] = useState({});
+
+  const openEdit = (hId) => setEditMap(p => ({ ...p, [hId]: true }));
+  const closeEdit = (hId) => setEditMap(p => ({ ...p, [hId]: false }));
+
+  const setField = (hId, key, val) => {
+    setLocal(prev => ({ ...prev, [hId]: { ...(prev[hId] || { sips:0, bonuses:0, penalties:0 }), [key]: val }}));
+  };
+
+  const confirmHole = async (hole) => {
+    const vals = local[hole.id] || { sips:0, bonuses:0, penalties:0 };
+    const total = (Number(vals.sips)||0) + (Number(vals.bonuses)||0) + (Number(vals.penalties)||0);
+    try {
+      await setDoc(
+        doc(db, "golf_scores", teamHoleId(roundId, teamName, hole.id)),
+        {
+          roundId, teamName,
+          holeId: hole.id, holeName: hole.name,
+          sips: Number(vals.sips)||0,
+          bonuses: Number(vals.bonuses)||0,
+          penalties: Number(vals.penalties)||0,
+          holeTotal: clamp2(total),
+          confirmedBy: userName || "unknown",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      toast.success(`${hole.name} saved`);
+      closeEdit(hole.id);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to save score");
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Card variant="plain" className="relative z-0" style={{ background: PUBGOLF_PAPER }}>
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between p-4">
+            <h2 className="text-lg font-semibold text-white">Holes</h2>
+          </div>
+          <Separator className="border-neutral-800" />
+          <div className="p-2 rounded-b-2xl" style={{ background: PUBGOLF_PAPER }}>
+            {(golfConfig.holes || []).map((h) => {
+              const vals = local[h.id] || { sips:0, bonuses:0, penalties:0 };
+              const total = (Number(vals.sips)||0)+(Number(vals.bonuses)||0)+(Number(vals.penalties)||0);
+              const editing = !!editMap[h.id];
+              return (
+                <details key={h.id} className="py-2 group">
+                  <summary className="list-none cursor-pointer px-2 py-2">
+                    <div
+                      className="
+                        w-full rounded-xl border shadow-sm px-3 py-2
+                        flex items-center justify-between
+                        bg-black/50 text-[color:var(--gold)]
+                        transition-colors border-neutral-800
+                      "
+                      style={{ ["--gold"]: PUBGOLF_GOLD }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">{h.name}</span>
+                        <span className="rounded-full text-xs px-2 py-[2px]" style={{ background: "#1d1f22", color: PUBGOLF_GOLD }}>
+                          {editing ? "editing" : "view"}
+                        </span>
+                      </div>
+                      <span className="text-sm text-white">Total: <strong style={{ color: PUBGOLF_GOLD }}>{clamp2(total).toFixed(2)}</strong></span>
+                    </div>
+                  </summary>
+
+                  <div className="px-2 pb-4">
+                    <div className="rounded-2xl p-3 bg-black/60 border border-neutral-800 text-white space-y-3">
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        <div>
+                          <Label className="text-neutral-400">Total sips</Label><br/>
+                          <SpinNumber value={vals.sips} setValue={(v)=>setField(h.id,"sips",v)} step={1} allowNegative={false} min={0} />
+                        </div>
+                        <div>
+                          <Label className="text-neutral-400">Bonuses</Label><br/>
+                          <SpinNumber value={vals.bonuses} setValue={(v)=>setField(h.id,"bonuses",v)} step={1} />
+                        </div>
+                        <div>
+                          <Label className="text-neutral-400">Penalties</Label><br/>
+                          <SpinNumber value={vals.penalties} setValue={(v)=>setField(h.id,"penalties",v)} step={1} />
+                        </div>
+                      </div>
+
+                      <Separator className="border-neutral-800" />
+                      <Row className="justify-between">
+                        <div className="text-sm text-neutral-300">Hole total</div>
+                        <div className="text-xl font-semibold" style={{ color: PUBGOLF_GOLD }}>{clamp2(total).toFixed(2)}</div>
+                      </Row>
+
+                      <Row className="gap-2 justify-end">
+                        {!editing ? (
+                          <Button variant="outline" className="bg-white text-black" onClick={()=>openEdit(h.id)}>
+                            Edit
+                          </Button>
+                        ) : (
+                          <>
+                            <Button variant="ghost" onClick={()=>closeEdit(h.id)}>Cancel</Button>
+                            <Button style={{ background: PUBGOLF_GOLD, color: "black" }} onClick={()=>confirmHole(h)}>
+                              Confirm
+                            </Button>
+                          </>
+                        )}
+                      </Row>
+                    </div>
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------- Ladder ----------
+function GolfLadder({ roundId, scores }) {
+  const totals = useMemo(() => {
+    const map = new Map();
+    for (const s of scores) {
+      if (s.roundId !== roundId) continue;
+      const key = s.teamName;
+      const prev = map.get(key) || 0;
+      map.set(key, clamp2(prev + (Number(s.holeTotal)||0)));
+    }
+    return Array.from(map.entries())
+      .map(([team, total]) => ({ team, total }))
+      .sort((a,b)=>a.total - b.total);
+  }, [scores, roundId]);
+
+  return (
+    <Card variant="plain" style={{ background: PUBGOLF_PAPER }}>
+      <CardContent>
+        <h2 className="text-lg font-semibold mb-2 text-white">Live Ladder</h2>
+        <div className="rounded-2xl overflow-hidden border border-neutral-800">
+          <table className="w-full text-sm" style={{ color: "white", background: "#0f1113" }}>
+            <thead style={{ background: "#15181c" }}>
+              <tr>
+                <th className="text-left p-3">#</th>
+                <th className="text-left p-3">Team</th>
+                <th className="text-right p-3">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {totals.map((row, i)=>(
+                <tr key={row.team} className="border-t border-neutral-800">
+                  <td className="p-3" style={{ color: PUBGOLF_GOLD }}>{i+1}</td>
+                  <td className="p-3">{row.team}</td>
+                  <td className="p-3 text-right font-semibold">{row.total.toFixed(2)}</td>
+                </tr>
+              ))}
+              {totals.length===0 && (
+                <tr><td className="p-3 text-neutral-400" colSpan={3}>No scores yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------- Page shell ----------
+function PubGolfPage({ golfConfig, teamName, userName, scores }) {
+  const [t, setT] = useState("scorecard"); // "scorecard" | "ladder"
+  return (
+    <div className="min-h-screen p-4 md:p-8" style={{ background: PUBGOLF_BLACK }}>
+      <div className="mx-auto max-w-6xl">
+        <Row className="justify-between gap-4 mb-3">
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "white" }}>
+            {golfConfig.title} <span style={{ color: PUBGOLF_GOLD }}>• 5th Anniversary</span>
+          </h1>
+        </Row>
+
+        {/* Sticky tabs */}
+        <div className="grid grid-cols-2 rounded-none overflow-hidden mb-3 sticky top-0 z-50 shadow-sm isolate" style={{ background: PUBGOLF_GOLD }}>
+          {[
+            { id: "scorecard", label: "Scorecard" },
+            { id: "ladder", label: "Ladder" },
+          ].map((x)=>(
+            <button key={x.id}
+              onClick={()=>setT(x.id)}
+              className={`py-2.5 text-sm w-full ${t===x.id ? "bg-white text-black border-b-4" : "text-black/90"}`}
+              style={t===x.id ? { borderColor: PUBGOLF_GOLD } : {}}
+            >
+              {x.label}
+            </button>
+          ))}
+        </div>
+
+        {t==="scorecard" ? (
+          <Scorecard roundId={ROUND_ID} golfConfig={golfConfig} teamName={teamName} userName={userName} />
+        ) : (
+          <GolfLadder roundId={ROUND_ID} scores={scores} />
+        )}
+      </div>
+    </div>
   );
 }
 
