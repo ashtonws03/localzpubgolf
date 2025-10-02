@@ -1,4 +1,4 @@
-import { collection, doc, addDoc, setDoc, getDocs, deleteDoc, writeBatch, query, orderBy, onSnapshot, serverTimestamp, documentId } from "firebase/firestore";
+import { collection, doc, addDoc, setDoc, getDocs, deleteDoc, writeBatch, query, where, orderBy, onSnapshot, serverTimestamp, documentId } from "firebase/firestore";
 import { db } from "./firebase";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 
@@ -437,6 +437,25 @@ const toggleHoleLock = async (holeId, nextLocked) => {
     toast.error("Failed to toggle hole lock");
   }
 };
+const clearAllGolfScores = async () => {
+  try {
+    if (!isAdmin) return;
+    const ok = window.confirm("This will delete ALL Pub Golf scores for this round. Continue?");
+    if (!ok) return;
+
+    const qScores = query(collection(db, "golf_scores"), where("roundId", "==", ROUND_ID));
+    const snap = await getDocs(qScores);
+
+    const batch = writeBatch(db);
+    snap.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+
+    toast.success("All Pub Golf scores cleared");
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to clear Pub Golf scores");
+  }
+};
 // Shared logout handler (used by both panels)
 const handleLogout = () => {
   try { localStorage.removeItem(LS_USER); } catch {}
@@ -732,15 +751,15 @@ if (page === "golf") {
   scores={golfScores}
   isAdmin={isAdmin}
   onToggleLock={toggleHoleLock}
-  // keep menu props if you still have them wired here:
+  onClearAllScores={clearAllGolfScores}
   menuOpen={menuOpen}
   setMenuOpen={setMenuOpen}
   theme={theme}
-        setIsAdmin={setIsAdmin}
-        setShowAdminModal={setShowAdminModal}
-        setPage={setPage}
-        onLogout={handleLogout}
-      />
+  setIsAdmin={setIsAdmin}
+  setShowAdminModal={setShowAdminModal}
+  setPage={setPage}
+  onLogout={handleLogout}
+/>
     </>
   );
 }
@@ -2071,7 +2090,7 @@ const isLocked = !!(golfConfig?.holes?.find(x => x.id===h.id)?.locked);
                       {isAdmin && (
                         <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
                           <div>
-                            <Label className="text-neutral-400">Hole name</Label>
+                            <Label className="text-white">Hole name</Label>
                             <Input
                               className="mt-1 bg-white text-black"
                               value={renameBuf[h.id] ?? h.name}
@@ -2095,15 +2114,15 @@ const isLocked = !!(golfConfig?.holes?.find(x => x.id===h.id)?.locked);
                       )}
                       <div className="grid sm:grid-cols-3 gap-3">
                         <div>
-                          <Label className="text-neutral-400">Total sips</Label><br/>
+                          <Label className="text-white">Total sips</Label><br/>
                           <SpinNumber value={vals.sips} setValue={(v)=>setField(h.id,"sips",v)} step={1} allowNegative={false} min={0} />
                         </div>
                         <div>
-                          <Label className="text-neutral-400">Bonuses</Label><br/>
+                          <Label className="text-white">Bonuses</Label><br/>
                           <SpinNumber value={vals.bonuses} setValue={(v)=>setField(h.id,"bonuses",v)} step={1} />
                         </div>
                         <div>
-                          <Label className="text-neutral-400">Penalties</Label><br/>
+                          <Label className="text-white">Penalties</Label><br/>
                           <SpinNumber value={vals.penalties} setValue={(v)=>setField(h.id,"penalties",v)} step={1} />
                         </div>
                       </div>
@@ -2146,13 +2165,23 @@ const isLocked = !!(golfConfig?.holes?.find(x => x.id===h.id)?.locked);
       )}
     </>
   ) : (
-    <>
-      <Button variant="ghost" onClick={() => cancelEdit(h)}>Cancel</Button>
-      <Button style={{ background: PUBGOLF_GOLD, color: "black" }} onClick={() => confirmHole(h)}>
-        Confirm
+  <>
+    {isAdmin && (
+      <Button
+        variant="outline"
+        className="bg-white text-black"
+        onClick={() => onToggleLock?.(h.id, !isLocked)}
+        title={isLocked ? "Unlock hole" : "Lock hole"}
+      >
+        {isLocked ? "Unlock hole" : "Lock hole"}
       </Button>
-    </>
-  )}
+    )}
+    <Button variant="ghost" onClick={() => cancelEdit(h)}>Cancel</Button>
+    <Button style={{ background: PUBGOLF_GOLD, color: "black" }} onClick={() => confirmHole(h)}>
+      Confirm
+    </Button>
+  </>
+)}
 </Row>
                     </div>
                   </div>
@@ -2394,6 +2423,16 @@ function PubGolfPage({
             >
               Turn off admin
             </Button>
+            <Button
+  className="w-full shadow-sm"
+  style={{ background: PUBGOLF_GOLD, color: "#000" }}
+  onClick={() => {
+    setMenuOpen(false);
+    onClearAllScores?.();
+  }}
+>
+  Clear all scores (round)
+</Button>
           </div>
         )}
       </div>
