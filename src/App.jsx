@@ -1453,41 +1453,42 @@ function BetSlip({
                   : { status: "—", potentialPayout: 0 };
 
                 return (
-                  <div
-                    key={b.id}
-                    className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white`}
-                  >
-                    <div className="text-xs text-neutral-600">
-                      {formatPlacedAt(b.placedAt)}
-                    </div>
-                    <div className="text-xs">
-                      Mode: <strong>{b.mode}</strong> · Status:{" "}
-                      <strong>{s.status}</strong>
-                      {" · "}Potential payout: $
-                      {s.potentialPayout.toFixed(2)}
-                    </div>
+  <div
+    key={b.id}
+    className={`${isYellow ? "shadow-sm" : "border"} rounded-2xl p-3 bg-white ${
+      s.status === "Won" ? "text-green-700 border-green-300" : ""
+    }`}
+  >
+    <div className={`text-xs ${s.status === "Won" ? "text-green-600" : "text-neutral-600"}`}>
+      {formatPlacedAt(b.placedAt)}
+    </div>
+    <div className="text-xs">
+      Mode: <strong>{b.mode}</strong> · Status:{" "}
+      <strong className={s.status === "Won" ? "text-green-700" : ""}>{s.status}</strong>
+      {" · "}Potential payout: ${s.potentialPayout.toFixed(2)}
+    </div>
 
-                    <div className="mt-2 space-y-1">
-                      {b.legs.map((l) => {
-                        const status = (legResults && legResults[l.legId]) || "pending";
-                        return (
-                          <div
-                            key={l.legId}
-                            className="text-sm flex items-center justify-between"
-                          >
-                            <div className="truncate pr-2">
-                              {l.marketName} — {l.label}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="text-xs">@ {l.odds.toFixed(2)}</div>
-                              <LegStatusIcon status={status} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
+    <div className="mt-2 space-y-1">
+      {b.legs.map((l) => {
+        const status = (legResults && legResults[l.legId]) || "pending";
+        return (
+          <div
+            key={l.legId}
+            className="text-sm flex items-center justify-between"
+          >
+            <div className="truncate pr-2">
+              {l.marketName} — {l.label}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-xs">@ {l.odds.toFixed(2)}</div>
+              <LegStatusIcon status={status} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+);
               })}
             </div>
           </div>
