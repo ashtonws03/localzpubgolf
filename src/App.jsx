@@ -670,8 +670,9 @@ return (
 
         {/* Logout — force readable text color */}
         <Button
-          className="w-full bg-white shadow-sm hover:bg-neutral-50 text-black"
-          onClick={() => {
+  variant="outline"
+  className="w-full bg-white shadow-sm hover:bg-neutral-50 !text-black !border-0"
+  onClick={() => {
             try { localStorage.removeItem(LS_USER); } catch {}
             try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
             setAuthed(false);
@@ -701,8 +702,9 @@ return (
           <div className="space-y-2">
             <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
             <Button
-              className="w-full bg-white shadow-sm hover:bg-neutral-50 text-black"
-              onClick={() => {
+  variant="outline"
+  className="w-full bg-white shadow-sm hover:bg-neutral-50 !text-black !border-0"
+  onClick={() => {
                 setIsAdmin(false);
                 localStorage.removeItem(LS_ADMIN);
                 setMenuOpen(false);
