@@ -638,11 +638,39 @@ return (
     >
       {/* Header strip: same height as handle; aligned at top */}
       <div
-        className="flex items-center h-12 px-3"
-        style={{ background: PRIMARY_BLUE, color: "white" }}
-      >
-        <div className="text-sm font-semibold">Menu</div>
-      </div>
+  className="flex items-center justify-between h-12 px-3"
+  style={{ background: PRIMARY_BLUE, color: "white" }}
+>
+  <div className="text-sm font-semibold">Menu</div>
+
+  {/* Close button (same look as the handle) */}
+  <button
+    aria-label="Close menu"
+    title="Close"
+    onClick={() => setMenuOpen(false)}
+    className="
+      inline-flex items-center justify-center
+      w-9 h-9 rounded-full
+      shadow-sm
+      focus:outline-none focus:ring-2 focus:ring-white/40
+      hover:opacity-90 active:opacity-80
+    "
+    style={{ background: "white" }}
+  >
+    {/* Right-facing chevron (same as handle when open) */}
+    <svg
+      className="w-4 h-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={PRIMARY_BLUE}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  </button>
+</div>
 
       {/* Panel body */}
       <div className="p-4 space-y-4">
