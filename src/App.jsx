@@ -569,178 +569,153 @@ return (
         </h1>
       </Row>
       
-          {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
-      <div className="fixed inset-0 z-[120] pointer-events-none">
-        {/* Backdrop (fade + click to close) */}
-        <div
-          className={`absolute inset-0 transition-opacity duration-300 ease-out ${
-            menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"
-          }`}
-          onClick={() => setMenuOpen(false)}
-        />
+{/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
+<div className="fixed inset-0 z-[120] pointer-events-none">
+  {/* Backdrop (fade + click to close) */}
+  <div
+    className={`absolute inset-0 transition-opacity duration-300 ease-out ${
+      menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"
+    }`}
+    onClick={() => setMenuOpen(false)}
+  />
 
-        {/* Right-edge wrapper keeps panel + handle at the screen edge */}
-        <div className="absolute top-0 right-0 h-full pointer-events-none">
-          {/* Sliding container (panel + handle move together so they stay attached) */}
-          <div
-            className="relative h-full pointer-events-auto"
-            style={{
-              // CSS "variables" we use in calc() so only the handle shows when closed
-              // PANEL_W = width of the panel; HANDLE_W = width of the tab/handle
-              // Closed transform = PANEL_W - HANDLE_W (panel fully offscreen, handle visible)
-              // Open transform   = 0 (panel fully visible).
-              // NOTE: keep HANDLE_W in sync with the handle button width below (w-[2.75rem])
-              // and PANEL_W in sync with the container width below (min(90vw, 20rem)).
-              "--panelW": "min(90vw, 20rem)",
-              "--handleW": "2.75rem",
-              width: "min(90vw, 20rem)", // equals var(--panelW)
-              transform: menuOpen ? "translateX(0)" : "translateX(calc(var(--panelW) - var(--handleW)))",
-              transition: "transform 300ms ease-in-out",
-              // Clip any panel shadow when closed so nothing "sticks out"
-              overflow: menuOpen ? "visible" : "hidden",
-            }}
-            role="dialog"
-            aria-label="User menu"
-          >
-            {/* Panel surface (no border line on the edge) */}
-            <div
-              className={`h-full ${menuOpen ? "shadow-xl" : ""}`}
-              style={{
-                background: LIGHT_BLUE_BG,
-                borderLeft: "none", // remove any black edge line
-              }}
-            >
-              {/* Panel header: exact fixed height matches handle (h-12 => 48px) */}
-              <div
-                className="relative flex items-center h-12 px-3"
-                style={{
-                  background: PRIMARY_BLUE,
-                  color: "white",
-                  // extend header background under the tab by padding on the right
-                  // adds a bit extra to avoid a visible “step” under the handle
-                  paddingRight: "3.75rem",
-                }}
-              >
-                <div className="text-sm font-semibold">Menu</div>
-                {/* Soft divider, not a hard black line */}
-                <div
-                  className="absolute left-0 right-0 bottom-0"
-                  style={{ height: 1, background: "rgba(255,255,255,0.15)" }}
-                />
-              </div>
+  {/* === Handle (backwards D), always visible, attached to panel edge === */}
+  <button
+    aria-label={menuOpen ? "Close menu" : "Open menu"}
+    title={menuOpen ? "Close menu" : "Open menu"}
+    onClick={() => setMenuOpen((v) => !v)}
+    className="
+      fixed top-0 right-0
+      w-11 h-12
+      rounded-l-full rounded-r-none
+      flex items-center justify-center
+      shadow-md
+      pointer-events-auto
+    "
+    style={{
+      background: PRIMARY_BLUE,
+      color: "white",
+      border: "none",
+    }}
+  >
+    {/* White circle containing the chevron (explicit blue stroke for contrast) */}
+    <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+      {menuOpen ? (
+        // Right chevron (close)
+        <svg
+          className="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#0a58ff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      ) : (
+        // Left chevron (open)
+        <svg
+          className="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#0a58ff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      )}
+    </span>
+  </button>
 
-              {/* Panel body */}
-              <div className="p-4 space-y-4">
-                <div className="text-xs text-neutral-700">
-                  Signed in as{" "}
-                  <strong className="text-[#0a58ff]">{userName || "—"}</strong>
-                  {userEmail ? (
-                    <span className="block text-neutral-600 break-all">{userEmail}</span>
-                  ) : null}
-                </div>
-
-                {/* Logout (no outline border; faint shadow like site buttons) */}
-                <Button
-                  className="w-full bg-white shadow-sm hover:bg-neutral-50"
-                  onClick={() => {
-                    try { localStorage.removeItem(LS_USER); } catch {}
-                    try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
-                    setAuthed(false);
-                    setUserName("");
-                    setUserEmail("");
-                    setAccessCode("");
-                    setMenuOpen(false);
-                    toast.success("Logged out");
-                  }}
-                >
-                  Log out
-                </Button>
-
-                {/* Admin actions (no outline borders) */}
-                {!isAdmin ? (
-                  <Button
-                    className="w-full shadow-sm"
-                    style={{ background: PRIMARY_BLUE, color: "white" }}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setShowAdminModal(true);
-                    }}
-                  >
-                    Admin login
-                  </Button>
-                ) : (
-                  <div className="space-y-2">
-                    <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
-                    <Button
-                      className="w-full bg-white shadow-sm hover:bg-neutral-50"
-                      onClick={() => {
-                        setIsAdmin(false);
-                        localStorage.removeItem(LS_ADMIN);
-                        setMenuOpen(false);
-                        toast.success("Admin disabled");
-                      }}
-                    >
-                      Turn off admin
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* === Backwards “D” tab handle (attached; aligns with header height) === */}
-            <button
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-              title={menuOpen ? "Close menu" : "Open menu"}
-              onClick={() => setMenuOpen((v) => !v)}
-              className="
-                absolute top-0
-                w-[2.75rem] h-12
-                -left-[2.75rem]
-                rounded-l-full rounded-r-none
-                flex items-center justify-center
-                shadow-md
-                pointer-events-auto
-              "
-              style={{
-                background: PRIMARY_BLUE,
-                color: "white",
-                border: "none", // no border line on handle
-              }}
-            >
-              {/* White circle containing the chevron (explicit blue stroke for contrast) */}
-              <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                {menuOpen ? (
-                  // Right chevron (close)
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#0a58ff"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M9 6l6 6-6 6" />
-                  </svg>
-                ) : (
-                  // Left chevron (open)
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#0a58ff"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M15 18l-6-6 6-6" />
-                  </svg>
-                )}
-              </span>
-            </button>
-          </div>
-        </div>
+  {/* === Sliding panel (fully hidden when closed) === */}
+  <div
+    className="fixed top-0 right-0 h-full pointer-events-auto"
+    style={{
+      width: "min(90vw, 20rem)",
+      transform: menuOpen ? "translateX(0)" : "translateX(100%)",
+      transition: "transform 300ms ease-in-out",
+    }}
+    role="dialog"
+    aria-label="User menu"
+  >
+    {/* Panel surface (no black edge line) */}
+    <div
+      className="h-full shadow-xl"
+      style={{
+        background: LIGHT_BLUE_BG,
+        borderLeft: "none",
+      }}
+    >
+      {/* Header strip: exact same height as handle (h-12) and aligned at the top */}
+      <div
+        className="flex items-center h-12 px-3"
+        style={{ background: PRIMARY_BLUE, color: "white" }}
+      >
+        <div className="text-sm font-semibold">Menu</div>
       </div>
+
+      {/* Panel body */}
+      <div className="p-4 space-y-4">
+        <div className="text-xs text-neutral-700">
+          Signed in as{" "}
+          <strong className="text-[#0a58ff]">{userName || "—"}</strong>
+          {userEmail ? (
+            <span className="block text-neutral-600 break-all">{userEmail}</span>
+          ) : null}
+        </div>
+
+        {/* Logout — no outline border; faint shadow like other site buttons */}
+        <Button
+          className="w-full bg-white shadow-sm hover:bg-neutral-50"
+          onClick={() => {
+            try { localStorage.removeItem(LS_USER); } catch {}
+            try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
+            setAuthed(false);
+            setUserName("");
+            setUserEmail("");
+            setAccessCode("");
+            setMenuOpen(false);
+            toast.success("Logged out");
+          }}
+        >
+          Log out
+        </Button>
+
+        {/* Admin actions — keep soft-shadow style */}
+        {!isAdmin ? (
+          <Button
+            className="w-full shadow-sm"
+            style={{ background: PRIMARY_BLUE, color: "white" }}
+            onClick={() => {
+              setMenuOpen(false);
+              setShowAdminModal(true);
+            }}
+          >
+            Admin login
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
+            <Button
+              className="w-full bg-white shadow-sm hover:bg-neutral-50"
+              onClick={() => {
+                setIsAdmin(false);
+                localStorage.removeItem(LS_ADMIN);
+                setMenuOpen(false);
+                toast.success("Admin disabled");
+              }}
+            >
+              Turn off admin
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
 
       {/* Admin PIN Modal */}
       {showAdminModal && (
