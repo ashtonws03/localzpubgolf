@@ -1908,9 +1908,10 @@ function SpinNumber({ value, setValue, step=1, allowNegative=true, min, max }) {
 const teamHoleId = (roundId, team, holeId) => `${roundId}__${team}__${holeId}`;
 
 // ---------- Scorecard ----------
-function Scorecard({ roundId, golfConfig, teamName, userName }) {
+function Scorecard({ roundId, golfConfig, teamName, userName, isAdmin, onRenameHole }) {
   const [editMap, setEditMap] = useState({});
-  const [local, setLocal] = useState({});
+const [local, setLocal] = useState({});
+const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
 
   const openEdit = (hId) => setEditMap(p => ({ ...p, [hId]: true }));
   const closeEdit = (hId) => setEditMap(p => ({ ...p, [hId]: false }));
@@ -1982,6 +1983,32 @@ function Scorecard({ roundId, golfConfig, teamName, userName }) {
 
                   <div className="px-2 pb-4">
                     <div className="rounded-2xl p-3 bg-black/60 border border-neutral-800 text-white space-y-3">
+                      {/* Admin: rename hole */}
+                      {isAdmin && (
+                        <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
+                          <div>
+                            <Label className="text-neutral-400">Hole name</Label>
+                            <Input
+                              className="mt-1 bg-white text-black"
+                              value={renameBuf[h.id] ?? h.name}
+                              onChange={(e) =>
+                                setRenameBuf((p) => ({ ...p, [h.id]: e.target.value }))
+                              }
+                            />
+                          </div>
+                          <Button
+                            style={{ background: PUBGOLF_GOLD, color: "black" }}
+                            onClick={() => {
+                              const newName = (renameBuf[h.id] ?? h.name).trim();
+                              if (!newName) { toast.error("Name can’t be empty"); return; }
+                              if (newName === h.name) { toast.info("No changes"); return; }
+                              onRenameHole?.(h.id, newName);
+                            }}
+                          >
+                            Save name
+                          </Button>
+                        </div>
+                      )}
                       <div className="grid sm:grid-cols-3 gap-3">
                         <div>
                           <Label className="text-neutral-400">Total sips</Label><br/>
@@ -2084,6 +2111,19 @@ function PubGolfPage({
   onLogout
 }) {
   const [t, setT] = useState("scorecard"); // "scorecard" | "ladder"
+    // Admin: rename hole and persist to golf_rounds/{ROUND_ID}
+  const renameHole = async (holeId, newName) => {
+    const roundRef = doc(db, "golf_rounds", ROUND_ID);
+    try {
+      const holes = Array.isArray(golfConfig.holes) ? golfConfig.holes : [];
+      const updated = holes.map(h => (h.id === holeId ? { ...h, name: newName } : h));
+      await setDoc(roundRef, { holes: updated }, { merge: true });
+      toast.success("Hole name updated");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update hole name");
+    }
+  };
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ background: PUBGOLF_BLACK }}>
       <div className="mx-auto max-w-6xl">
@@ -2266,11 +2306,18 @@ function PubGolfPage({
           ))}
         </div>
 
-        {t==="scorecard" ? (
-          <Scorecard roundId={ROUND_ID} golfConfig={golfConfig} teamName={teamName} userName={userName} />
-        ) : (
-          <GolfLadder roundId={ROUND_ID} scores={scores} />
-        )}
+        {t === "scorecard" ? (
+  <Scorecard
+    roundId={ROUND_ID}
+    golfConfig={golfConfig}
+    teamName={teamName}
+    userName={userName}
+    isAdmin={isAdmin}
+    onRenameHole={renameHole}
+  />
+) : (
+  <GolfLadder roundId={ROUND_ID} scores={scores} />
+)}
       </div>
     </div>
   );
