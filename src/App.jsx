@@ -659,21 +659,70 @@ const updateLeg = (marketId, legId, patch) => {
 // --- Main UI ---
 if (page === "golf") {
   return (
-    <PubGolfPage
-  golfConfig={golfConfig}
-  teamName={teamName}
-  userName={userName}
-  userEmail={userEmail}
-  scores={golfScores}
-  menuOpen={menuOpen}
-  setMenuOpen={setMenuOpen}
-  theme={theme}
-  isAdmin={isAdmin}
-  setIsAdmin={setIsAdmin}
-  setShowAdminModal={setShowAdminModal}
-  setPage={setPage}
-  onLogout={handleLogout}
-/>
+    <>
+      {/* Admin PIN Modal (mounted on golf page too) */}
+      {showAdminModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowAdminModal(false); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white border shadow-lg p-4"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="text-lg font-semibold mb-2">Enter Admin PIN</div>
+            <p className="text-sm text-neutral-600 mb-3">Access to admin tools is protected. Enter the 4-digit PIN.</p>
+            <Input
+              ref={pinInputRef}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              placeholder="••••"
+              value={adminPinInput}
+              onChange={(e) => setAdminPinInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+            />
+            <Row className="justify-end gap-2 mt-3">
+              <Button variant="ghost" onClick={() => { setShowAdminModal(false); setAdminPinInput(""); }}>
+                Cancel
+              </Button>
+              <Button
+                style={{ background: PRIMARY_BLUE, color: "white" }}
+                onClick={() => {
+                  if (adminPinInput === ADMIN_PIN) {
+                    setIsAdmin(true);
+                    localStorage.setItem(LS_ADMIN, "1");
+                    setShowAdminModal(false);
+                    setAdminPinInput("");
+                    toast.success("Admin unlocked");
+                    setTab("admin");
+                  } else {
+                    toast.error("Incorrect PIN");
+                  }
+                }}
+              >
+                Unlock
+              </Button>
+            </Row>
+          </div>
+        </div>
+      )}
+
+      <PubGolfPage
+        golfConfig={golfConfig}
+        teamName={teamName}
+        userName={userName}
+        userEmail={userEmail}
+        scores={golfScores}
+        menuOpen={menuOpen}
+        setMenuOpen={setMenuOpen}
+        theme={theme}
+        isAdmin={isAdmin}
+        setIsAdmin={setIsAdmin}
+        setShowAdminModal={setShowAdminModal}
+        setPage={setPage}
+        onLogout={handleLogout}
+      />
+    </>
   );
 }
 
