@@ -26,6 +26,11 @@ const ACCENT_YELLOW = "#ffd200";
 const LIGHT_BLUE_BG = "#e6f0ff";     // stronger light blue (Sportsbet vibe)
 const LIGHT_YELLOW_BG = "#ffd200";   // solid yellow for small betslip
 const NAVY_TEXT = "#002147";         // deep navy for headings in tinted areas
+// --- Pub Golf (Dally M) theme ---
+const GOLD = "#d4af37";
+const GOLD_SOFT = "#e6c766";
+const GOLF_BG = "#0b0b0b";
+const GOLF_CARD = "#131313";
 // -------------------- Constants & Helpers --------------------
 const PUBGOLF_GOLD = "#d4af37";
 const PUBGOLF_BLACK = "#0b0b0b";
@@ -194,6 +199,26 @@ const userKey = useMemo(() => makeUserKey(userName, userEmail), [userName, userE
   const pinInputRef = useRef(null);
   // Slide-out menu (top-right)
 const [menuOpen, setMenuOpen] = useState(false);
+// Theme switches per page (bet builder vs pub golf)
+const theme = useMemo(() => (
+  page === "golf"
+    ? {
+        brand: GOLD,                // handle + panel header
+        panelBg: "#111111",         // panel body bg
+        textOnBrand: "#000000",     // icon on gold
+        textOnPanel: "#ffffff",     // text in panel
+        buttonBg: "#000000",        // black buttons
+        buttonText: "#ffffff",
+      }
+    : {
+        brand: PRIMARY_BLUE,
+        panelBg: LIGHT_BLUE_BG,
+        textOnBrand: "#ffffff",
+        textOnPanel: "#000000",
+        buttonBg: PRIMARY_BLUE,
+        buttonText: "#ffffff",
+      }
+), [page]);
 
 // --- STATE ---
 // Config state (markets/legs) — synced with Firestore
@@ -624,11 +649,15 @@ const updateLeg = (marketId, legId, patch) => {
 if (page === "golf") {
   return (
     <PubGolfPage
-      golfConfig={golfConfig}
-      teamName={teamName}
-      userName={userName}
-      scores={golfScores}
-    />
+  golfConfig={golfConfig}
+  teamName={teamName}
+  userName={userName}
+  scores={golfScores}
+  // NEW: give the golf page access to the handle/panel + theme
+  menuOpen={menuOpen}
+  setMenuOpen={setMenuOpen}
+  theme={theme}
+/>
   );
 }
 
@@ -680,17 +709,18 @@ return (
       {/* Sentinel that is visible only when we are at the top.
     When this scrolls out of view, we hide the handle. */}
       
-{/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
+{/* Slide-out side menu (the handle lives in each page header; panel is global) */}
 <div className="fixed inset-0 z-[120] pointer-events-none">
-  {/* Backdrop (fade + click to close) */}
+  {/* Backdrop */}
   <div
     className={`absolute inset-0 transition-opacity duration-300 ease-out ${
-      menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"
+      menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0"
     }`}
+    style={{ background: page === "golf" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.4)" }}
     onClick={() => setMenuOpen(false)}
   />
 
-  {/* === Sliding panel (fully hidden when closed) === */}
+  {/* Panel */}
   <div
     className="fixed top-0 right-0 h-full pointer-events-auto z-[125]"
     style={{
@@ -701,73 +731,72 @@ return (
     role="dialog"
     aria-label="User menu"
   >
-    {/* Panel surface (no black edge line) */}
     <div
       className="h-full shadow-xl"
       style={{
-        background: LIGHT_BLUE_BG,
+        background: theme.panelBg, // blue page: LIGHT_BLUE_BG; golf page: near-black
         borderLeft: "none",
+        color: theme.textOnPanel,
       }}
     >
-      {/* Header strip: same height as handle; aligned at top */}
+      {/* Panel header bar (brand color) */}
       <div
-  className="flex items-center justify-between h-12 px-3"
-  style={{ background: PRIMARY_BLUE, color: "white" }}
->
-  <div className="text-sm font-semibold">Menu</div>
+        className="flex items-center justify-between h-12 px-3"
+        style={{ background: theme.brand, color: theme.textOnBrand }}
+      >
+        <div className="text-sm font-semibold">Menu</div>
 
-  {/* Close button (same look as the handle) */}
-  <button
-    aria-label="Close menu"
-    title="Close"
-    onClick={() => setMenuOpen(false)}
-    className="
-      inline-flex items-center justify-center
-      w-9 h-9 rounded-full
-      shadow-sm
-      focus:outline-none focus:ring-2 focus:ring-white/40
-      hover:opacity-90 active:opacity-80
-    "
-    style={{ background: "white" }}
-  >
-    {/* Right-facing chevron (same as handle when open) */}
-    <svg
-      className="w-4 h-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={PRIMARY_BLUE}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 6l6 6-6 6" />
-    </svg>
-  </button>
-</div>
+        {/* Close (round) button */}
+        <button
+          aria-label="Close menu"
+          title="Close"
+          onClick={() => setMenuOpen(false)}
+          className="
+            inline-flex items-center justify-center
+            w-9 h-9 rounded-full
+            shadow-sm
+            focus:outline-none focus:ring-2
+          "
+          style={{
+            background: page === "golf" ? "#000" : "#fff",
+            color: page === "golf" ? "#fff" : theme.brand,
+            outlineColor: page === "golf" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)",
+          }}
+        >
+          {/* Right chevron (same shape as handle when open) */}
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={page === "golf" ? "#fff" : theme.brand}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+      </div>
 
       {/* Panel body */}
-      <div className="p-4 space-y-4">
-        {/* Page switcher */}
-<Button
-  className="w-full shadow-sm"
-  style={{ background: page === "golf" ? PRIMARY_BLUE : PUBGOLF_GOLD, color: page === "golf" ? "white" : "black" }}
-  onClick={() => { setPage(page === "golf" ? "bet" : "golf"); setMenuOpen(false); }}
->
-  {page === "golf" ? "Back to Bet Builder" : "Go to Pub Golf 2025"}
-</Button>
-        <div className="text-xs text-neutral-700">
+      <div className="p-4 space-y-4" style={{ color: theme.textOnPanel }}>
+        <div className="text-xs opacity-90">
           Signed in as{" "}
-          <strong className="text-[#0a58ff]">{userName || "—"}</strong>
+          <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
           {userEmail ? (
-            <span className="block text-neutral-600 break-all">{userEmail}</span>
+            <span className="block break-all opacity-90">{userEmail}</span>
           ) : null}
         </div>
 
-        {/* Logout — force readable text color */}
+        {/* Logout */}
         <Button
-  variant="outline"
-  className="w-full bg-white shadow-sm hover:bg-neutral-50 !text-black !border-0"
-  onClick={() => {
+          variant="outline"
+          className="w-full shadow-sm !border-0"
+          style={{
+            background: page === "golf" ? "#000" : "#fff",
+            color: page === "golf" ? "#fff" : "#000",
+          }}
+          onClick={() => {
             try { localStorage.removeItem(LS_USER); } catch {}
             try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
             setAuthed(false);
@@ -781,11 +810,23 @@ return (
           Log out
         </Button>
 
-        {/* Admin actions — soft shadow style */}
+        {/* Go to Pub Golf / Bet Builder switch */}
+        <Button
+          className="w-full shadow-sm"
+          style={{ background: theme.buttonBg, color: theme.buttonText }}
+          onClick={() => {
+            setMenuOpen(false);
+            setPage(page === "golf" ? "builder" : "golf");
+          }}
+        >
+          {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
+        </Button>
+
+        {/* Admin actions */}
         {!isAdmin ? (
           <Button
             className="w-full shadow-sm"
-            style={{ background: PRIMARY_BLUE, color: "white" }}
+            style={{ background: theme.buttonBg, color: theme.buttonText }}
             onClick={() => {
               setMenuOpen(false);
               setShowAdminModal(true);
@@ -795,11 +836,23 @@ return (
           </Button>
         ) : (
           <div className="space-y-2">
-            <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
+            <Badge
+              className="inline-block"
+              style={{
+                background: theme.brand,
+                color: theme.textOnBrand,
+              }}
+            >
+              Admin
+            </Badge>
             <Button
-  variant="outline"
-  className="w-full bg-white shadow-sm hover:bg-neutral-50 !text-black !border-0"
-  onClick={() => {
+              variant="outline"
+              className="w-full shadow-sm !border-0"
+              style={{
+                background: page === "golf" ? "#000" : "#fff",
+                color: page === "golf" ? "#fff" : "#000",
+              }}
+              onClick={() => {
                 setIsAdmin(false);
                 localStorage.removeItem(LS_ADMIN);
                 setMenuOpen(false);
@@ -1970,6 +2023,50 @@ function PubGolfPage({ golfConfig, teamName, userName, scores }) {
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ background: PUBGOLF_BLACK }}>
       <div className="mx-auto max-w-6xl">
+        {/* Header with gold handle (scrolls with the title) */}
+<div className="relative mb-4 z-40">
+  <Row className="justify-between gap-4 pr-14">
+    <h1 className="text-2xl md:text-3xl font-bold text-white">
+      Pub Golf 2025: Cairns
+    </h1>
+  </Row>
+
+  {/* Gold handle – same behavior as builder (sits in header, scrolls away) */}
+  <button
+    aria-label={menuOpen ? "Close menu" : "Open menu"}
+    title={menuOpen ? "Close menu" : "Open menu"}
+    onClick={() => setMenuOpen((v) => !v)}
+    className="
+      absolute right-0 top-0
+      w-11 h-12
+      rounded-l-full rounded-r-none
+      flex items-center justify-center
+      shadow-md
+      z-40
+    "
+    style={{
+      background: theme.brand,    // gold
+      color: "white",
+      border: "none",
+    }}
+  >
+    <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+      {menuOpen ? (
+        // right chevron
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"
+          stroke={theme.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      ) : (
+        // left chevron
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"
+          stroke={theme.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      )}
+    </span>
+  </button>
+</div>
         <Row className="justify-between gap-4 mb-3">
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "white" }}>
             {golfConfig.title} <span style={{ color: PUBGOLF_GOLD }}>• 5th Anniversary</span>
