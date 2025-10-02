@@ -279,6 +279,7 @@ const defaultHoles = Array.from({ length: 9 }, (_, i) => ({
   id: `h${i+1}`,
   name: `Hole ${i+1}`,
   active: true,
+  locked: false,
 }));
 
 const [golfConfig, setGolfConfig] = useState({ title: "Pub Golf 2025: Cairns", holes: defaultHoles });
@@ -418,6 +419,23 @@ const forceSave = async () => {
 const refreshFromCloud = () => {
   // onSnapshot already keeps you live; this button is a visible "pull" action.
   toast.info("Fetching latest config from cloud…");
+};
+// Toggle lock for a hole in the round doc
+const toggleHoleLock = async (holeId, nextLocked) => {
+  try {
+    const roundRef = doc(db, "golf_rounds", ROUND_ID);
+    const next = {
+      ...golfConfig,
+      holes: (golfConfig.holes || []).map(h =>
+        h.id === holeId ? { ...h, locked: !!nextLocked } : h
+      ),
+    };
+    await setDoc(roundRef, next, { merge: true });
+    toast.success(`${nextLocked ? "Locked" : "Unlocked"} ${holeId}`);
+  } catch (e) {
+    console.error(e);
+    toast.error("Failed to toggle hole lock");
+  }
 };
 // Shared logout handler (used by both panels)
 const handleLogout = () => {
@@ -708,15 +726,16 @@ if (page === "golf") {
       )}
 
       <PubGolfPage
-        golfConfig={golfConfig}
-        teamName={teamName}
-        userName={userName}
-        userEmail={userEmail}
-        scores={golfScores}
-        menuOpen={menuOpen}
-        setMenuOpen={setMenuOpen}
-        theme={theme}
-        isAdmin={isAdmin}
+  golfConfig={golfConfig}
+  teamName={teamName}
+  userName={userName}
+  scores={golfScores}
+  isAdmin={isAdmin}
+  onToggleLock={toggleHoleLock}
+  // keep menu props if you still have them wired here:
+  menuOpen={menuOpen}
+  setMenuOpen={setMenuOpen}
+  theme={theme}
         setIsAdmin={setIsAdmin}
         setShowAdminModal={setShowAdminModal}
         setPage={setPage}
@@ -1881,36 +1900,77 @@ function AdminBetsPanel({ bets, settleBet, onDeleteBet }) {
   );
 }
 // ---------- Pub Golf helpers ----------
+// Pub Golf score helpers (ID + defaults)
+const docIdForScore = (roundId, team, holeId) => `${roundId}__${team}__${holeId}`;
+const emptyVals = { sips: 0, bonuses: 0, penalties: 0, holeTotal: 0, confirmed: false };
 function SpinNumber({ value, setValue, step=1, allowNegative=true, min, max }) {
   const clamp = (n) => {
     if (typeof min === "number") n = Math.max(min, n);
     if (typeof max === "number") n = Math.min(max, n);
     return n;
   };
+  const toInt = (n) => Number.isFinite(n) ? Math.round(n) : 0; // whole numbers
+
   return (
-    <div className="inline-flex items-stretch overflow-hidden rounded-xl border bg-white">
-      <button className="px-3 text-lg" onClick={() => setValue(clamp((Number(value)||0) - step))}>–</button>
+    <div className="inline-flex items-stretch overflow-hidden rounded-xl border border-neutral-700 bg-white">
+      <button
+        className="px-3 text-lg font-bold bg-black text-white"
+        onClick={() => setValue(clamp(toInt((Number(value)||0) - step)))}
+        type="button"
+      >
+        –
+      </button>
       <input
-        className="w-16 text-center outline-none"
+        className="w-20 text-center outline-none bg-white text-black font-semibold"
         type="number"
         step={step}
         value={value ?? 0}
         onChange={(e)=> {
           const n = parseFloat(e.target.value);
           if (!allowNegative && n < 0) return;
-          setValue(clamp(Number.isFinite(n) ? n : 0));
+          setValue(clamp(toInt(n)));
         }}
       />
-      <button className="px-3 text-lg" onClick={() => setValue(clamp((Number(value)||0) + step))}>+</button>
+      <button
+        className="px-3 text-lg font-bold bg-black text-white"
+        onClick={() => setValue(clamp(toInt((Number(value)||0) + step)))}
+        type="button"
+      >
+        +
+      </button>
     </div>
   );
 }
 const teamHoleId = (roundId, team, holeId) => `${roundId}__${team}__${holeId}`;
 
 // ---------- Scorecard ----------
-function Scorecard({ roundId, golfConfig, teamName, userName, isAdmin, onRenameHole }) {
+function Scorecard({ roundId, golfConfig, teamName, userName, isAdmin, onToggleLock, onRenameHole }) {
   const [editMap, setEditMap] = useState({});
-const [local, setLocal] = useState({});
+  const [local, setLocal] = useState({});
+  const [saved, setSaved] = useState({}); // per-hole saved values from Firestore
+
+  // Subscribe to each hole’s saved score for this team
+  useEffect(() => {
+    const unsubs = (golfConfig.holes || []).map((h) => {
+      const ref = doc(db, "golf_scores", docIdForScore(roundId, teamName, h.id));
+      return onSnapshot(ref, (snap) => {
+        const data = snap.exists() ? snap.data() : emptyVals;
+        const v = {
+          sips: Number(data.sips||0),
+          bonuses: Number(data.bonuses||0),
+          penalties: Number(data.penalties||0),
+          holeTotal: Number(data.holeTotal||0),
+          confirmed: !!data.confirmed,
+        };
+        setSaved((p) => ({ ...p, [h.id]: v }));
+        // If we don't have local inputs yet, initialize from saved
+        setLocal((p) => p[h.id] ? p : ({ ...p, [h.id]: { sips: v.sips, bonuses: v.bonuses, penalties: v.penalties } }));
+        // By default, if already confirmed, not editing; otherwise allow editing to confirm
+        setEditMap((p) => (typeof p[h.id] !== "boolean") ? ({ ...p, [h.id]: !v.confirmed }) : p);
+      });
+    });
+    return () => unsubs.forEach((u)=>u && u());
+  }, [roundId, teamName, golfConfig?.holes?.length]);
 const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
 
   const openEdit = (hId) => setEditMap(p => ({ ...p, [hId]: true }));
@@ -1920,30 +1980,38 @@ const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
     setLocal(prev => ({ ...prev, [hId]: { ...(prev[hId] || { sips:0, bonuses:0, penalties:0 }), [key]: val }}));
   };
 
-  const confirmHole = async (hole) => {
+    const confirmHole = async (hole) => {
     const vals = local[hole.id] || { sips:0, bonuses:0, penalties:0 };
-    const total = (Number(vals.sips)||0) + (Number(vals.bonuses)||0) + (Number(vals.penalties)||0);
+    const sips = Math.round(Number(vals.sips)||0);
+    const bonuses = Math.round(Number(vals.bonuses)||0);
+    const penalties = Math.round(Number(vals.penalties)||0);
+    const total = sips + bonuses + penalties;
+
     try {
       await setDoc(
-        doc(db, "golf_scores", teamHoleId(roundId, teamName, hole.id)),
+        doc(db, "golf_scores", docIdForScore(roundId, teamName, hole.id)),
         {
           roundId, teamName,
           holeId: hole.id, holeName: hole.name,
-          sips: Number(vals.sips)||0,
-          bonuses: Number(vals.bonuses)||0,
-          penalties: Number(vals.penalties)||0,
-          holeTotal: clamp2(total),
+          sips, bonuses, penalties,
+          holeTotal: total,
+          confirmed: true,
           confirmedBy: userName || "unknown",
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
-      toast.success(`${hole.name} saved`);
+      toast.success(`${hole.name} confirmed`);
       closeEdit(hole.id);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to save score");
+      toast.error("Failed to confirm score");
     }
+  };
+    const cancelEdit = (hole) => {
+    const v = saved[hole.id] || emptyVals;
+    setLocal((p) => ({ ...p, [hole.id]: { sips: v.sips, bonuses: v.bonuses, penalties: v.penalties } }));
+    closeEdit(hole.id);
   };
 
   return (
@@ -1957,8 +2025,11 @@ const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
           <div className="p-2 rounded-b-2xl" style={{ background: PUBGOLF_PAPER }}>
             {(golfConfig.holes || []).map((h) => {
               const vals = local[h.id] || { sips:0, bonuses:0, penalties:0 };
-              const total = (Number(vals.sips)||0)+(Number(vals.bonuses)||0)+(Number(vals.penalties)||0);
-              const editing = !!editMap[h.id];
+const editing = !!editMap[h.id];
+const savedVals = saved[h.id] || emptyVals;
+const liveTotal = Math.round((Number(vals.sips)||0) + (Number(vals.bonuses)||0) + (Number(vals.penalties)||0));
+const displayTotal = editing ? liveTotal : Math.round(savedVals.holeTotal || 0);
+const isLocked = !!(golfConfig?.holes?.find(x => x.id===h.id)?.locked);
               return (
                 <details key={h.id} className="py-2 group">
                   <summary className="list-none cursor-pointer px-2 py-2">
@@ -1977,7 +2048,20 @@ const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
                           {editing ? "editing" : "view"}
                         </span>
                       </div>
-                      <span className="text-sm text-white">Total: <strong style={{ color: PUBGOLF_GOLD }}>{clamp2(total).toFixed(2)}</strong></span>
+                      <span className="text-sm text-white flex items-center gap-2">
+  Total:
+  <strong style={{ color: PUBGOLF_GOLD }}>{displayTotal}</strong>
+  {savedVals.confirmed && !editing && (
+    <span className="text-[11px] px-2 py-[2px] rounded-full" style={{ background: "#1d1f22", color: PUBGOLF_GOLD }}>
+      confirmed
+    </span>
+  )}
+  {isLocked && (
+    <span className="text-[11px] px-2 py-[2px] rounded-full bg-red-700/30 text-red-300">
+      locked
+    </span>
+  )}
+</span>
                     </div>
                   </summary>
 
@@ -2031,19 +2115,45 @@ const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
                       </Row>
 
                       <Row className="gap-2 justify-end">
-                        {!editing ? (
-                          <Button variant="outline" className="bg-white text-black" onClick={()=>openEdit(h.id)}>
-                            Edit
-                          </Button>
-                        ) : (
-                          <>
-                            <Button variant="ghost" onClick={()=>closeEdit(h.id)}>Cancel</Button>
-                            <Button style={{ background: PUBGOLF_GOLD, color: "black" }} onClick={()=>confirmHole(h)}>
-                              Confirm
-                            </Button>
-                          </>
-                        )}
-                      </Row>
+  {!editing ? (
+    <>
+      {isAdmin && (
+        <Button
+          variant="outline"
+          className="bg-white text-black"
+          onClick={() => onToggleLock?.(h.id, !isLocked)}
+          title={isLocked ? "Unlock hole" : "Lock hole"}
+        >
+          {isLocked ? "Unlock hole" : "Lock hole"}
+        </Button>
+      )}
+      {!isLocked && savedVals.confirmed && (
+        <Button
+          variant="outline"
+          className="bg-white text-black"
+          onClick={() => openEdit(h.id)}
+        >
+          Edit
+        </Button>
+      )}
+      {!isLocked && !savedVals.confirmed && (
+        <Button
+          style={{ background: PUBGOLF_GOLD, color: "black" }}
+          onClick={() => confirmHole(h)}
+        >
+          Confirm
+        </Button>
+      )}
+    </>
+  ) : (
+    <>
+      <Button variant="ghost" onClick={() => cancelEdit(h)}>Cancel</Button>
+      <Button style={{ background: PUBGOLF_GOLD, color: "black" }} onClick={() => confirmHole(h)}>
+        Confirm
+      </Button>
+    </>
+  )}
+</Row>
                     </div>
                   </div>
                 </details>
@@ -2059,17 +2169,18 @@ const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
 // ---------- Ladder ----------
 function GolfLadder({ roundId, scores }) {
   const totals = useMemo(() => {
-    const map = new Map();
-    for (const s of scores) {
-      if (s.roundId !== roundId) continue;
-      const key = s.teamName;
-      const prev = map.get(key) || 0;
-      map.set(key, clamp2(prev + (Number(s.holeTotal)||0)));
-    }
-    return Array.from(map.entries())
-      .map(([team, total]) => ({ team, total }))
-      .sort((a,b)=>a.total - b.total);
-  }, [scores, roundId]);
+  const map = new Map();
+  for (const s of scores) {
+    if (s.roundId !== roundId) continue;
+    if (!s.confirmed) continue;                   // <-- only confirmed scores count
+    const key = s.teamName;
+    const prev = map.get(key) || 0;
+    map.set(key, prev + Math.round(Number(s.holeTotal)||0));
+  }
+  return Array.from(map.entries())
+    .map(([team, total]) => ({ team, total }))
+    .sort((a,b)=>a.total - b.total);
+}, [scores, roundId]);
 
   return (
     <Card variant="plain" style={{ background: PUBGOLF_PAPER }}>
@@ -2108,7 +2219,7 @@ function PubGolfPage({
   golfConfig, teamName, userName, userEmail, scores,
   menuOpen, setMenuOpen, theme,
   isAdmin, setIsAdmin, setShowAdminModal, setPage,
-  onLogout
+  onLogout, onToggleLock
 }) {
   const [t, setT] = useState("scorecard"); // "scorecard" | "ladder"
     // Admin: rename hole and persist to golf_rounds/{ROUND_ID}
@@ -2313,6 +2424,7 @@ function PubGolfPage({
     teamName={teamName}
     userName={userName}
     isAdmin={isAdmin}
+    onToggleLock={onToggleLock}
     onRenameHole={renameHole}
   />
 ) : (
