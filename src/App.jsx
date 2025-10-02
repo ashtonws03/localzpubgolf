@@ -749,19 +749,20 @@ return (
             )}
 
             <MarketList
-              config={config}
-              isAdmin={isAdmin}
-              onAddMarket={addMarket}
-              onRemoveMarket={removeMarket}
-              onUpdateMarket={updateMarket}
-              onAddLeg={addLeg}
-              onRemoveLeg={removeLeg}
-              onUpdateLeg={updateLeg}
-              onToggleSelect={(legId) =>
-                setSlip((prev) => (prev.includes(legId) ? prev.filter((id) => id !== legId) : [...prev, legId]))
-              }
-              selected={slip}
-            />
+  config={config}
+  isAdmin={isAdmin}
+  mode={isAdmin ? "edit" : "browse"}
+  onAddMarket={addMarket}
+  onRemoveMarket={removeMarket}
+  onUpdateMarket={updateMarket}
+  onAddLeg={addLeg}
+  onRemoveLeg={removeLeg}
+  onUpdateLeg={updateLeg}
+  onToggleSelect={(legId) =>
+    setSlip((prev) => (prev.includes(legId) ? prev.filter((id) => id !== legId) : [...prev, legId]))
+  }
+  selected={slip}
+/>
           </div>
 
           <div className="md:col-span-1">
@@ -834,59 +835,27 @@ return (
   </Card>
 </div>
             <Card>
-              <CardContent className="space-y-3">
-                <h2 className="text-lg font-semibold">Settle Legs</h2>
-                <p className="text-sm text-neutral-600">
-                  Mark outcomes for each leg. Bets settle automatically. (Won = ✅, Lost = ❌, Pending = …)
-                </p>
-                <Separator />
-                <div className="space-y-4">
-                  {(config.markets ?? []).map((m) => (
-                    <div key={m.id}>
-                      <div className="font-medium mb-2">{m.name}</div>
-                      <div className="space-y-2">
-                        {m.legs.map((l) => (
-                          <div key={l.id} className="rounded-2xl border p-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-sm font-medium">{l.label}</div>
-                                <div className="text-xs text-neutral-600">Odds {l.odds.toFixed(2)}</div>
-                              </div>
-                              <Badge className="bg-neutral-100 text-neutral-700 capitalize">
-                                {l.result || "pending"}
-                              </Badge>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <Button
-                                size="sm"
-                                variant={l.result === "won" ? "default" : "outline"}
-                                onClick={() => updateLeg(m.id, l.id, { result: "won" })}
-                              >
-                                Won
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={l.result === "lost" ? "default" : "outline"}
-                                onClick={() => updateLeg(m.id, l.id, { result: "lost" })}
-                              >
-                                Lost
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={l.result === "pending" ? "default" : "outline"}
-                                onClick={() => updateLeg(m.id, l.id, { result: "pending" })}
-                              >
-                                Pending
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+  <CardContent className="space-y-3">
+    <h2 className="text-lg font-semibold">Settle Legs</h2>
+    <p className="text-sm text-neutral-600">
+      Tap a market to open, then mark each leg as Won, Lost, or Pending. Bets settle automatically.
+    </p>
+    <Separator />
+    <MarketList
+      config={config}
+      isAdmin={isAdmin}
+      mode="settle"
+      onAddMarket={() => {}}
+      onRemoveMarket={() => {}}
+      onUpdateMarket={() => {}}
+      onAddLeg={() => {}}
+      onRemoveLeg={() => {}}
+      onUpdateLeg={updateLeg}   {/* this actually changes leg status */}
+      onToggleSelect={() => {}}
+      selected={[]}
+    />
+  </CardContent>
+</Card>
           </div>
           <div className="md:col-span-1 space-y-4">
             <AdminBetsPanel bets={bets} settleBet={settleBet} onDeleteBet={deleteBet} />
@@ -903,6 +872,7 @@ return (
 function MarketList({
   config,
   isAdmin,
+  mode = "browse", // "browse" | "edit" | "settle"
   onAddMarket,
   onRemoveMarket,
   onUpdateMarket,
@@ -943,12 +913,14 @@ function MarketList({
     } catch {}
   }, [openMap]);
 
+  const showEditHeader = isAdmin && mode === "edit";
+
   return (
     <Card variant="plain" className="relative z-0" style={{ background: LIGHT_BLUE_BG }}>
       <CardContent className="p-0">
         <div className="flex items-center justify-between p-4">
           <h2 className="text-lg font-semibold">Markets</h2>
-          {isAdmin && (
+          {showEditHeader && (
             <Button onClick={onAddMarket} size="sm" style={{ background: PRIMARY_BLUE, color: "white" }}>
               Add market
             </Button>
@@ -978,7 +950,6 @@ function MarketList({
                     group-open:bg-[#0a58ff] group-open:text-white
                   "
                 >
-                  {/* Left: market name + inactive tag */}
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{m.name}</span>
                     {m.active === false && (
@@ -988,7 +959,6 @@ function MarketList({
                     )}
                   </div>
 
-                  {/* Right: icon circle inside the bubble (contrasts on hover/open) */}
                   <span
                     className="
                       w-6 h-6 rounded-full flex items-center justify-center border
@@ -1021,7 +991,8 @@ function MarketList({
 
               {/* Body */}
               <div className="px-2 pb-4">
-                {isAdmin && (
+                {/* Edit-only market controls (rename/active/add/delete) */}
+                {showEditHeader && (
                   <div className="grid md:grid-cols-3 gap-2 mb-3">
                     <div className="md:col-span-2 flex items-center gap-2">
                       <Input
@@ -1050,78 +1021,121 @@ function MarketList({
                 )}
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {m.legs.map((l) => (
-                    <div
-                      key={l.id}
-                      className={`rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between relative z-0 ${
-                        selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""
-                      }`}
-                    >
-                      <div className="flex-1 pr-2">
-                        <div className="text-sm font-medium">{l.label}</div>
-                        <div className="text-xs text-neutral-600">
-                          Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}
-                        </div>
-                        {isAdmin && (
-                          <div className="mt-2 flex flex-col gap-2">
-                            <div className="w-full">
-                              <Label className="text-xs text-neutral-600">Leg name</Label>
-                              <Input
-                                className="w-full text-sm h-11"
-                                value={l.label}
-                                onChange={(e) => onUpdateLeg(m.id, l.id, { label: e.target.value })}
-                              />
-                            </div>
-                            <div className="w-full">
-                              <Label className="text-xs text-neutral-600">Odds</Label>
-                              <Input
-                                className="w-full text-sm h-11"
-                                type="number"
-                                step="0.01"
-                                inputMode="decimal"
-                                value={l.odds}
-                                onChange={(e) => onUpdateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })}
-                              />
-                            </div>
-                            <div className="w-full">
-                              <Label className="text-xs text-neutral-600">Status</Label>
-                              <select
-                                className="w-full border rounded-xl h-11 px-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus:outline-none focus:ring-2 focus:ring-[#0a58ff]"
-                                value={l.result || "pending"}
-                                onChange={(e) => onUpdateLeg(m.id, l.id, { result: e.target.value })}
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="won">Won</option>
-                                <option value="lost">Lost</option>
-                              </select>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                  {m.legs.map((l) => {
+                    const baseTile =
+                      "rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between relative z-0";
+                    const isSelected =
+                      Array.isArray(selected) && selected.includes?.(l.id);
+                    const tileClass =
+                      mode === "browse" && isSelected ? `${baseTile} ring-2 ring-[#0a58ff]` : baseTile;
 
-                      <div className="flex items-center gap-2">
-                        {!isAdmin && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className={
-                              selected.includes(l.id)
-                                ? "!bg-[#ffd200] !text-black hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
-                                : "!bg-[#0a58ff] !text-white hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
-                            }
-                            onClick={() => onToggleSelect(l.id)}
-                          >
-                            {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
-                          </Button>
-                        )}
-                        {isAdmin && (
-                          <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>
-                            Delete
-                          </Button>
-                        )}
+                    return (
+                      <div key={l.id} className={tileClass}>
+                        <div className="flex-1 pr-2">
+                          <div className="text-sm font-medium">{l.label}</div>
+                          <div className="text-xs text-neutral-600">
+                            Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}
+                          </div>
+
+                          {/* EDIT mode: full inline inputs */}
+                          {isAdmin && mode === "edit" && (
+                            <div className="mt-2 flex flex-col gap-2">
+                              <div className="w-full">
+                                <Label className="text-xs text-neutral-600">Leg name</Label>
+                                <Input
+                                  className="w-full text-sm h-11"
+                                  value={l.label}
+                                  onChange={(e) => onUpdateLeg(m.id, l.id, { label: e.target.value })}
+                                />
+                              </div>
+                              <div className="w-full">
+                                <Label className="text-xs text-neutral-600">Odds</Label>
+                                <Input
+                                  className="w-full text-sm h-11"
+                                  type="number"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  value={l.odds}
+                                  onChange={(e) =>
+                                    onUpdateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })
+                                  }
+                                />
+                              </div>
+                              <div className="w-full">
+                                <Label className="text-xs text-neutral-600">Status</Label>
+                                <select
+                                  className="w-full border rounded-xl h-11 px-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus:outline-none focus:ring-2 focus:ring-[#0a58ff]"
+                                  value={l.result || "pending"}
+                                  onChange={(e) => onUpdateLeg(m.id, l.id, { result: e.target.value })}
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="won">Won</option>
+                                  <option value="lost">Lost</option>
+                                </select>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* SETTLE mode: compact status buttons */}
+                          {isAdmin && mode === "settle" && (
+                            <div className="mt-2">
+                              <Badge className="bg-neutral-100 text-neutral-700 capitalize">
+                                {l.result || "pending"}
+                              </Badge>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  variant={l.result === "won" ? "default" : "outline"}
+                                  onClick={() => onUpdateLeg(m.id, l.id, { result: "won" })}
+                                >
+                                  Won
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={l.result === "lost" ? "default" : "outline"}
+                                  onClick={() => onUpdateLeg(m.id, l.id, { result: "lost" })}
+                                >
+                                  Lost
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={l.result === "pending" ? "default" : "outline"}
+                                  onClick={() => onUpdateLeg(m.id, l.id, { result: "pending" })}
+                                >
+                                  Pending
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* BROWSE mode (players): Add/Selected button */}
+                          {mode === "browse" && !isAdmin && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className={
+                                isSelected
+                                  ? "!bg-[#ffd200] !text-black hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
+                                  : "!bg-[#0a58ff] !text-white hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
+                              }
+                              onClick={() => onToggleSelect?.(l.id)}
+                            >
+                              {isSelected ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
+                            </Button>
+                          )}
+
+                          {/* EDIT mode (admins): delete leg */}
+                          {isAdmin && mode === "edit" && (
+                            <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>
+                              Delete
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </details>
