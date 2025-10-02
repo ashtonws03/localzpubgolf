@@ -173,6 +173,8 @@ export default function BetBuilderApp() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState("");
   const pinInputRef = useRef(null);
+  // Slide-out menu (top-right)
+const [menuOpen, setMenuOpen] = useState(false);
 
 // --- STATE ---
 // Config state (markets/legs) — synced with Firestore
@@ -565,45 +567,142 @@ return (
         <h1 className="text-2xl md:text-3xl font-bold">
           Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
         </h1>
-        <Row className="gap-3">
-          <div className="text-xs text-neutral-600">
-            Signed in as <strong>{userName}</strong>{userEmail ? ` · ${userEmail}` : ""}
-          </div>
+        {/* Right-side slide-out menu handle */}
+<button
+  aria-label="Open menu"
+  onClick={() => setMenuOpen(true)}
+  className="
+    group relative
+    flex items-center justify-center
+    w-10 h-28
+    rounded-l-2xl
+    shadow-sm
+    border-l-0 border-y border-l-transparent border-[#0a58ff]/30
+    text-white
+    hover:opacity-90 active:opacity-80
+  "
+  style={{ background: PRIMARY_BLUE }}
+>
+  {/* Vertical column with leftward arrow */}
+  <div className="flex flex-col items-center gap-1 select-none">
+    {/* Arrow pointing left */}
+    <svg
+      className="w-5 h-5"
+      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+    {/* Thin vertical line for visual cue */}
+    <div className="w-[2px] h-14 bg-white/80 rounded-full" />
+  </div>
+</button>
+      </Row>
+      {/* Slide-out side menu + backdrop */}
+{menuOpen && (
+  <div className="fixed inset-0 z-[120]">
+    {/* Backdrop */}
+    <div
+      className="absolute inset-0 bg-black/40"
+      onClick={() => setMenuOpen(false)}
+    />
+
+    {/* Panel */}
+    <div
+      className="absolute top-0 right-0 h-full w-72 shadow-xl border-l bg-white"
+      style={{ background: LIGHT_BLUE_BG }}
+      role="dialog"
+      aria-label="User menu"
+    >
+      {/* Panel header */}
+      <div
+        className="flex items-center justify-between p-3 border-b"
+        style={{ background: PRIMARY_BLUE, color: "white" }}
+      >
+        <div className="text-sm font-semibold">Menu</div>
+        <button
+          aria-label="Close menu"
+          onClick={() => setMenuOpen(false)}
+          className="rounded-lg p-1 hover:bg-white/10"
+          title="Close"
+        >
+          {/* Leftward arrow (to indicate closing to the right edge) */}
+          <svg
+            className="w-5 h-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10 6l-6 6 6 6" />
+            <path d="M20 12H4" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Panel body */}
+      <div className="p-4 space-y-4">
+        <div className="text-xs text-neutral-700">
+          Signed in as{" "}
+          <strong className="text-[#0a58ff]">{userName || "—"}</strong>
+          {userEmail ? (
+            <span className="block text-neutral-600 break-all">{userEmail}</span>
+          ) : null}
+        </div>
+
+        {/* Logout */}
+        <Button
+          variant="outline"
+          className="w-full bg-white hover:bg-neutral-50"
+          onClick={() => {
+            try { localStorage.removeItem(LS_USER); } catch {}
+            try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
+            setAuthed(false);
+            setUserName("");
+            setUserEmail("");
+            setAccessCode("");
+            setMenuOpen(false);
+            toast.success("Logged out");
+          }}
+        >
+          Log out
+        </Button>
+
+        {/* Admin actions */}
+        {!isAdmin ? (
           <Button
-            variant="ghost"
+            className="w-full"
+            style={{ background: PRIMARY_BLUE, color: "white" }}
             onClick={() => {
-              try { localStorage.removeItem(LS_USER); } catch {}
-              try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
-              setAuthed(false);
-              setUserName("");
-              setUserEmail("");
-              setAccessCode("");
-              toast.success("Logged out");
+              setMenuOpen(false);
+              setShowAdminModal(true);
             }}
           >
-            Log out
+            Admin login
           </Button>
-          {isAdmin ? (
-            <Row className="gap-2">
-              <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsAdmin(false);
-                  localStorage.removeItem(LS_ADMIN);
-                  toast.success("Admin disabled");
-                }}
-              >
-                Turn off
-              </Button>
-            </Row>
-          ) : (
-            <Button variant="outline" className="relative z-40" onClick={() => setShowAdminModal(true)}>
-              Admin
+        ) : (
+          <div className="space-y-2">
+            <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
+            <Button
+              variant="outline"
+              className="w-full bg-white hover:bg-neutral-50"
+              onClick={() => {
+                setIsAdmin(false);
+                localStorage.removeItem(LS_ADMIN);
+                setMenuOpen(false);
+                toast.success("Admin disabled");
+              }}
+            >
+              Turn off admin
             </Button>
-          )}
-        </Row>
-      </Row>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Admin PIN Modal */}
       {showAdminModal && (
