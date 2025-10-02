@@ -175,29 +175,6 @@ export default function BetBuilderApp() {
   const pinInputRef = useRef(null);
   // Slide-out menu (top-right)
 const [menuOpen, setMenuOpen] = useState(false);
-// Smoothly hide the handle based on how much the header is visible
-const handleSentinelRef = useRef(null);
-// 0 (gone) .. 1 (fully visible)
-const [headerRatio, setHeaderRatio] = useState(1);
-
-useEffect(() => {
-  const el = handleSentinelRef.current;
-  if (!el) return;
-
-  // Create many thresholds so we get a smooth ratio
-  const thresholds = Array.from({ length: 101 }, (_, i) => i / 100);
-
-  const obs = new IntersectionObserver(
-    (entries) => {
-      const r = entries[0]?.intersectionRatio ?? 0;
-      setHeaderRatio(r);
-    },
-    { root: null, threshold: thresholds }
-  );
-
-  obs.observe(el);
-  return () => obs.disconnect();
-}, []);
 
 // --- STATE ---
 // Config state (markets/legs) — synced with Firestore
@@ -586,14 +563,49 @@ const updateLeg = (marketId, legId, patch) => {
 return (
   <div className="min-h-screen bg-neutral-50 p-4 md:p-8">
     <div className="mx-auto max-w-6xl relative z-0">
-      <Row className="justify-between gap-4 mb-4 relative z-30">
-        <h1 className="text-2xl md:text-3xl font-bold">
-          Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
-        </h1>
-      </Row>
+      {/* Header with in-flow handle (scrolls away like the title) */}
+<div className="relative mb-4 z-40">
+  <Row className="justify-between gap-4 pr-14"> {/* pr to give the handle room */}
+    <h1 className="text-2xl md:text-3xl font-bold">
+      Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
+    </h1>
+  </Row>
+
+  {/* Handle sits in the header, absolutely positioned; it will scroll away with the header.
+      Because tabs are sticky (z-50), they will naturally cover this as you scroll. */}
+  <button
+    aria-label={menuOpen ? "Close menu" : "Open menu"}
+    title={menuOpen ? "Close menu" : "Open menu"}
+    onClick={() => setMenuOpen((v) => !v)}
+    className="
+      absolute right-0 top-0
+      w-11 h-12
+      rounded-l-full rounded-r-none
+      flex items-center justify-center
+      shadow-md
+      z-40
+    "
+    style={{
+      background: PRIMARY_BLUE,
+      color: "white",
+      border: "none",
+    }}
+  >
+    <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+      {menuOpen ? (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      )}
+    </span>
+  </button>
+</div>
       {/* Sentinel that is visible only when we are at the top.
     When this scrolls out of view, we hide the handle. */}
-<div ref={handleSentinelRef} style={{ height: 1 }} aria-hidden="true" />
       
 {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
 <div className="fixed inset-0 z-[120] pointer-events-none">
@@ -604,47 +616,6 @@ return (
     }`}
     onClick={() => setMenuOpen(false)}
   />
-
-  {/* === Handle (backwards D), always visible, sits ABOVE the panel === */}
-  <button
-  aria-label={menuOpen ? "Close menu" : "Open menu"}
-  title={menuOpen ? "Close menu" : "Open menu"}
-  onClick={() => setMenuOpen((v) => !v)}
-  className="
-    fixed right-0
-    w-11 h-12
-    rounded-l-full rounded-r-none
-    flex items-center justify-center
-    shadow-md
-    pointer-events-auto
-    z-[130]
-    transition-transform transition-opacity duration-200 ease-out
-  "
-  style={{
-    top: 0, // always at the very top, above the sticky tabs
-    background: PRIMARY_BLUE,
-    color: "white",
-    border: "none",
-    // Slide amount: when headerRatio=1 → 0px; when 0 → -120% (off the top)
-    transform: `translateY(${-(1 - headerRatio) * 120}%)`,
-    // Fade in/out to match the motion
-    opacity: Math.max(0, Math.min(1, headerRatio)),
-    // Avoid “ghost” clicks while mostly gone
-    pointerEvents: headerRatio < 0.15 ? "none" : "auto",
-  }}
->
-  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-    {menuOpen ? (
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    ) : (
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M15 18l-6-6 6-6" />
-      </svg>
-    )}
-  </span>
-</button>
 
   {/* === Sliding panel (fully hidden when closed) === */}
   <div
