@@ -44,6 +44,7 @@ const formatPlacedAt = (ts) => {
 const LS_BETSLIP = "betbuilder_betslip_v2";
 const LS_USER = "betbuilder_user_v2";
 const LS_ADMIN = "betbuilder_admin_v2";
+const LS_MARKET_STATE = "betbuilder_market_open_v1";
 
 // Minimal toast fallback
 const toast = {
@@ -572,6 +573,7 @@ return (
             variant="ghost"
             onClick={() => {
               try { localStorage.removeItem(LS_USER); } catch {}
+              try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
               setAuthed(false);
               setUserName("");
               setUserEmail("");
@@ -898,181 +900,232 @@ return (
 
 
 // -------------------- Subcomponents --------------------
-function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMarket, onAddLeg, onRemoveLeg, onUpdateLeg, onToggleSelect, selected }) {
+function MarketList({
+  config,
+  isAdmin,
+  onAddMarket,
+  onRemoveMarket,
+  onUpdateMarket,
+  onAddLeg,
+  onRemoveLeg,
+  onUpdateLeg,
+  onToggleSelect,
+  selected,
+}) {
+  // Persisted open/closed state per marketId
+  const [openMap, setOpenMap] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(LS_MARKET_STATE) || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  // Ensure every current market has a key in openMap (default CLOSED)
+  React.useEffect(() => {
+    const markets = config?.markets ?? [];
+    let changed = false;
+    const next = { ...openMap };
+    for (const m of markets) {
+      if (typeof next[m.id] === "undefined") {
+        next[m.id] = false; // closed by default
+        changed = true;
+      }
+    }
+    if (changed) setOpenMap(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config?.markets?.length]);
+
+  // Persist whenever openMap changes
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(LS_MARKET_STATE, JSON.stringify(openMap));
+    } catch {}
+  }, [openMap]);
+
   return (
     <Card variant="plain" className="relative z-0" style={{ background: LIGHT_BLUE_BG }}>
       <CardContent className="p-0">
         <div className="flex items-center justify-between p-4">
           <h2 className="text-lg font-semibold">Markets</h2>
           {isAdmin && (
-            <Button onClick={onAddMarket} size="sm" style={{ background: PRIMARY_BLUE, color: "white" }}>Add market</Button>
+            <Button onClick={onAddMarket} size="sm" style={{ background: PRIMARY_BLUE, color: "white" }}>
+              Add market
+            </Button>
           )}
         </div>
         <Separator />
         <div className="p-2 rounded-b-2xl" style={{ background: LIGHT_BLUE_BG }}>
           {(config.markets ?? []).map((m) => (
-  <details key={m.id} className="py-2 group" open>
-    {/* Full-width bubble header */}
-    <summary className="list-none cursor-pointer px-2 py-2">
-      <div
-        className="
-          w-full rounded-xl border shadow-sm px-3 py-2
-          flex items-center justify-between
-          bg-white text-[#0a58ff] border-[#0a58ff]/30
-          transition-colors
-          hover:bg-[#0a58ff] hover:text-white
-          group-open:bg-[#0a58ff] group-open:text-white
-        "
-      >
-        {/* Left: market name + inactive tag */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{m.name}</span>
-          {m.active === false && (
-            <span className="rounded-full bg-neutral-200 text-neutral-800 text-[11px] px-2 py-[2px]">
-              inactive
-            </span>
-          )}
-        </div>
-
-        {/* Right: icon circle INSIDE the bubble (contrasts with bubble color) */}
-        <span
-          className="
-            w-6 h-6 rounded-full flex items-center justify-center border
-            shadow-sm text-white bg-[#0a58ff] border-[#0a58ff]/30
-            transition-colors
-            /* When bubble turns blue (hover/open), circle flips to white/blue */
-            group-hover:bg-white group-hover:text-[#0a58ff]
-            group-open:bg-white group-open:text-[#0a58ff]
-          "
-          aria-hidden="true"
-        >
-          {/* Show ARROW when OPEN */}
-          <svg
-            className="w-3.5 h-3.5 hidden group-open:block"
-            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-          {/* Show HORIZONTAL LINE when CLOSED */}
-          <svg
-            className="w-3.5 h-3.5 block group-open:hidden"
-            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          >
-            <path d="M4 12h16" />
-          </svg>
-        </span>
-      </div>
-    </summary>
-
-    {/* Body */}
-    <div className="px-2 pb-4">
-      {isAdmin && (
-        <div className="grid md:grid-cols-3 gap-2 mb-3">
-          <div className="md:col-span-2 flex items-center gap-2">
-            <Input
-              className="flex-1 min-w-[260px]"
-              value={m.name}
-              onChange={(e) => onUpdateMarket(m.id, { name: e.target.value })}
-            />
-            <label className="text-xs flex items-center gap-1 px-2">
-              <input
-                type="checkbox"
-                checked={m.active !== false}
-                onChange={(e) => onUpdateMarket(m.id, { active: e.target.checked })}
-              />
-              Active
-            </label>
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => onAddLeg(m.id)}>
-              Add leg
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => onRemoveMarket(m.id)}>
-              Delete
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {m.legs.map((l) => (
-          <div
-            key={l.id}
-            className={`rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between relative z-0 ${
-              selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""
-            }`}
-          >
-            <div className="flex-1 pr-2">
-              <div className="text-sm font-medium">{l.label}</div>
-              <div className="text-xs text-neutral-600">
-                Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}
-              </div>
-              {isAdmin && (
-                <div className="mt-2 flex flex-col gap-2">
-                  <div className="w-full">
-                    <Label className="text-xs text-neutral-600">Leg name</Label>
-                    <Input
-                      className="w-full text-sm h-11"
-                      value={l.label}
-                      onChange={(e) => onUpdateLeg(m.id, l.id, { label: e.target.value })}
-                    />
-                  </div>
-                  <div className="w-full">
-                    <Label className="text-xs text-neutral-600">Odds</Label>
-                    <Input
-                      className="w-full text-sm h-11"
-                      type="number"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={l.odds}
-                      onChange={(e) => onUpdateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="w-full">
-                    <Label className="text-xs text-neutral-600">Status</Label>
-                    <select
-                      className="w-full border rounded-xl h-11 px-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus:outline-none focus:ring-2 focus:ring-[#0a58ff]"
-                      value={l.result || "pending"}
-                      onChange={(e) => onUpdateLeg(m.id, l.id, { result: e.target.value })}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="won">Won</option>
-                      <option value="lost">Lost</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!isAdmin && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className={
-                    selected.includes(l.id)
-                      ? "!bg-[#ffd200] !text-black hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
-                      : "!bg-[#0a58ff] !text-white hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
-                  }
-                  onClick={() => onToggleSelect(l.id)}
+            <details
+              key={m.id}
+              className="py-2 group"
+              open={!!openMap[m.id]}
+              onToggle={(e) => {
+                const isOpen = e.currentTarget.open;
+                setOpenMap((prev) => ({ ...prev, [m.id]: isOpen }));
+              }}
+            >
+              {/* Full-width bubble header */}
+              <summary className="list-none cursor-pointer px-2 py-2">
+                <div
+                  className="
+                    w-full rounded-xl border shadow-sm px-3 py-2
+                    flex items-center justify-between
+                    bg-white text-[#0a58ff] border-[#0a58ff]/30
+                    transition-colors
+                    hover:bg-[#0a58ff] hover:text-white
+                    group-open:bg-[#0a58ff] group-open:text-white
+                  "
                 >
-                  {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
-                </Button>
-              )}
-              {isAdmin && (
-                <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>
-                  Delete
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </details>
-))}
+                  {/* Left: market name + inactive tag */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{m.name}</span>
+                    {m.active === false && (
+                      <span className="rounded-full bg-neutral-200 text-neutral-800 text-[11px] px-2 py-[2px]">
+                        inactive
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right: icon circle inside the bubble (contrasts on hover/open) */}
+                  <span
+                    className="
+                      w-6 h-6 rounded-full flex items-center justify-center border
+                      shadow-sm text-white bg-[#0a58ff] border-[#0a58ff]/30
+                      transition-colors
+                      group-hover:bg-white group-hover:text-[#0a58ff]
+                      group-open:bg-white group-open:text-[#0a58ff]
+                    "
+                    aria-hidden="true"
+                  >
+                    {/* Show ARROW when OPEN */}
+                    <svg
+                      className="w-3.5 h-3.5 hidden group-open:block"
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                    {/* Show HORIZONTAL LINE when CLOSED */}
+                    <svg
+                      className="w-3.5 h-3.5 block group-open:hidden"
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <path d="M4 12h16" />
+                    </svg>
+                  </span>
+                </div>
+              </summary>
+
+              {/* Body */}
+              <div className="px-2 pb-4">
+                {isAdmin && (
+                  <div className="grid md:grid-cols-3 gap-2 mb-3">
+                    <div className="md:col-span-2 flex items-center gap-2">
+                      <Input
+                        className="flex-1 min-w-[260px]"
+                        value={m.name}
+                        onChange={(e) => onUpdateMarket(m.id, { name: e.target.value })}
+                      />
+                      <label className="text-xs flex items-center gap-1 px-2">
+                        <input
+                          type="checkbox"
+                          checked={m.active !== false}
+                          onChange={(e) => onUpdateMarket(m.id, { active: e.target.checked })}
+                        />
+                        Active
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => onAddLeg(m.id)}>
+                        Add leg
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => onRemoveMarket(m.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {m.legs.map((l) => (
+                    <div
+                      key={l.id}
+                      className={`rounded-2xl p-3 bg-white shadow-sm flex items-center justify-between relative z-0 ${
+                        selected.includes(l.id) ? "ring-2 ring-[#0a58ff]" : ""
+                      }`}
+                    >
+                      <div className="flex-1 pr-2">
+                        <div className="text-sm font-medium">{l.label}</div>
+                        <div className="text-xs text-neutral-600">
+                          Odds {l.odds.toFixed(2)} · Result {l.result ?? "pending"}
+                        </div>
+                        {isAdmin && (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <div className="w-full">
+                              <Label className="text-xs text-neutral-600">Leg name</Label>
+                              <Input
+                                className="w-full text-sm h-11"
+                                value={l.label}
+                                onChange={(e) => onUpdateLeg(m.id, l.id, { label: e.target.value })}
+                              />
+                            </div>
+                            <div className="w-full">
+                              <Label className="text-xs text-neutral-600">Odds</Label>
+                              <Input
+                                className="w-full text-sm h-11"
+                                type="number"
+                                step="0.01"
+                                inputMode="decimal"
+                                value={l.odds}
+                                onChange={(e) => onUpdateLeg(m.id, l.id, { odds: parseFloat(e.target.value) || 0 })}
+                              />
+                            </div>
+                            <div className="w-full">
+                              <Label className="text-xs text-neutral-600">Status</Label>
+                              <select
+                                className="w-full border rounded-xl h-11 px-2 border-[#0a58ff]/40 bg-[#0a58ff]/5 focus:outline-none focus:ring-2 focus:ring-[#0a58ff]"
+                                value={l.result || "pending"}
+                                onChange={(e) => onUpdateLeg(m.id, l.id, { result: e.target.value })}
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="won">Won</option>
+                                <option value="lost">Lost</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!isAdmin && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className={
+                              selected.includes(l.id)
+                                ? "!bg-[#ffd200] !text-black hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
+                                : "!bg-[#0a58ff] !text-white hover:!bg-[#ffd200] hover:!text-black focus:ring-0 focus:outline-none"
+                            }
+                            onClick={() => onToggleSelect(l.id)}
+                          >
+                            {selected.includes(l.id) ? "Selected" : `Add @ ${l.odds.toFixed(2)}`}
+                          </Button>
+                        )}
+                        {isAdmin && (
+                          <Button variant="destructive" size="sm" onClick={() => onRemoveLeg(m.id, l.id)}>
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ))}
         </div>
       </CardContent>
     </Card>
