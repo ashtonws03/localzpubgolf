@@ -1970,6 +1970,8 @@ const teamHoleId = (roundId, team, holeId) => `${roundId}__${team}__${holeId}`;
 // ---------- Scorecard ----------
 function Scorecard({ roundId, golfConfig, teamName, userName, isAdmin, onToggleLock, onRenameHole }) {
   const [editMap, setEditMap] = useState({});
+const editMapRef = useRef({});
+useEffect(() => { editMapRef.current = editMap; }, [editMap]);
   const [local, setLocal] = useState({});
   const [saved, setSaved] = useState({}); // per-hole saved values from Firestore
 
@@ -1987,17 +1989,33 @@ function Scorecard({ roundId, golfConfig, teamName, userName, isAdmin, onToggleL
           confirmed: !!data.confirmed,
         };
         setSaved((p) => ({ ...p, [h.id]: v }));
-        // If we don't have local inputs yet, initialize from saved
-        setLocal((p) => p[h.id] ? p : ({ ...p, [h.id]: { sips: v.sips, bonuses: v.bonuses, penalties: v.penalties } }));
-        // By default, if already confirmed, not editing; otherwise allow editing to confirm
-        setEditMap((p) => (typeof p[h.id] !== "boolean") ? ({ ...p, [h.id]: !v.confirmed }) : p);
+
+// Keep inputs in sync with Firestore when NOT editing
+setLocal((p) => {
+  const isEditing = !!editMapRef.current[h.id];
+  if (isEditing) return p;
+  return { ...p, [h.id]: { sips: v.sips, bonuses: v.bonuses, penalties: v.penalties } };
+});
+
+// If a hole becomes confirmed, flip to view mode automatically.
+// Also initialize a default edit/view state for unseen holes.
+setEditMap((p) => {
+  const prev = p[h.id];
+  if (v.confirmed) return { ...p, [h.id]: false };            // confirmed => view mode
+  if (typeof prev !== "boolean") return { ...p, [h.id]: true }; // unconfirmed and unseen => editing
+  return p;
+});
       });
     });
     return () => unsubs.forEach((u)=>u && u());
   }, [roundId, teamName, golfConfig?.holes?.length]);
 const [renameBuf, setRenameBuf] = useState({}); // holeId -> string (temp name)
 
-  const openEdit = (hId) => setEditMap(p => ({ ...p, [hId]: true }));
+  const openEdit = (hId) => {
+  const s = saved[hId] || emptyVals;
+  setLocal((p) => ({ ...p, [hId]: { sips: s.sips, bonuses: s.bonuses, penalties: s.penalties } }));
+  setEditMap((p) => ({ ...p, [hId]: true }));
+};
   const closeEdit = (hId) => setEditMap(p => ({ ...p, [hId]: false }));
 
   const setField = (hId, key, val) => {
