@@ -2040,7 +2040,7 @@ const isLocked = !!(golfConfig?.holes?.find(x => x.id===h.id)?.locked);
                         bg-black/50 text-[color:var(--gold)]
                         transition-colors border-neutral-800
                       "
-                      style={{ ["--gold"]: PUBGOLF_GOLD }}
+                      style={{ '--gold': PUBGOLF_GOLD }}
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-white">{h.name}</span>
@@ -2111,7 +2111,7 @@ const isLocked = !!(golfConfig?.holes?.find(x => x.id===h.id)?.locked);
                       <Separator className="border-neutral-800" />
                       <Row className="justify-between">
                         <div className="text-sm text-neutral-300">Hole total</div>
-                        <div className="text-xl font-semibold" style={{ color: PUBGOLF_GOLD }}>{clamp2(total).toFixed(2)}</div>
+                        <div className="text-xl font-semibold" style={{ color: PUBGOLF_GOLD }}>{displayTotal}</div>
                       </Row>
 
                       <Row className="gap-2 justify-end">
@@ -2200,7 +2200,7 @@ function GolfLadder({ roundId, scores }) {
                 <tr key={row.team} className="border-t border-neutral-800">
                   <td className="p-3" style={{ color: PUBGOLF_GOLD }}>{i+1}</td>
                   <td className="p-3">{row.team}</td>
-                  <td className="p-3 text-right font-semibold">{row.total.toFixed(2)}</td>
+                  <td className="p-3 text-right font-semibold">{row.total}</td>
                 </tr>
               ))}
               {totals.length===0 && (
