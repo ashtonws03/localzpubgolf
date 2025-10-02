@@ -655,69 +655,100 @@ const updateLeg = (marketId, legId, patch) => {
   };
 
   // --- Access Gate ---
-  if (!authed) {
-    return (
-      <div className="min-h-screen bg-neutral-50 p-4 md:p-8 flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="space-y-4">
-            <Row className="gap-2"><span className="text-xl font-semibold">Restricted Access</span></Row>
-            <p className="text-sm text-neutral-600">Enter the access code to continue. Add your name (and optional email) so the admin can identify your bets.</p>
-            {/* REPLACE the existing <Col className="gap-3">...</Col> with this */}
-<Row className="items-stretch gap-3">
-  {/* Left logo (hidden on very small screens to keep the card tidy) */}
-  <img
-    src="/assets/localz-5yr.png"
-    alt="Localz • 5 Years"
-    className="hidden sm:block h-24 w-auto shrink-0 self-center"
-    style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}
-  />
+if (!authed) {
+  return (
+    <div className="min-h-screen bg-neutral-50 p-4 md:p-8 flex items-center justify-center">
+      {/* 2-column wrapper: form + logo */}
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        {/* LEFT: Access card */}
+        <div className="order-2 md:order-1">
+          <Card className="w-full">
+            <CardContent className="space-y-4">
+              <Row className="gap-2">
+                <span className="text-xl font-semibold">Restricted Access</span>
+              </Row>
+              <p className="text-sm text-neutral-600">
+                Enter the access code to continue. Add your name (and team) so the admin can
+                identify your bets.
+              </p>
 
-  {/* Form column */}
-  <Col className="gap-3 flex-1 min-w-[260px]">
-    <Col>
-      <Label>Access code</Label>
-      <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Enter code" />
-    </Col>
+              <Col className="gap-3">
+                <Col>
+                  <Label>Access code</Label>
+                  <Input
+                    value={accessCode}
+                    onChange={(e) => setAccessCode(e.target.value)}
+                    placeholder="Enter code"
+                  />
+                </Col>
 
-    <Col>
-      <Label>Name (required)</Label>
-      <Input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Your name" />
-    </Col>
+                <Col>
+                  <Label>Name (required)</Label>
+                  <Input
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    placeholder="Your name"
+                  />
+                </Col>
 
-    <Col>
-      <Label>Team name (required, case sensitive)</Label>
-      <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Exact team name" />
-    </Col>
+                <Col>
+                  <Label>Team name (required, case sensitive)</Label>
+                  <Input
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="Exact team name"
+                  />
+                </Col>
 
-    <Button
-      style={{ background: PRIMARY_BLUE, color: "white" }}
-      onClick={() => {
-        if (accessCode !== ACCESS_CODE) { toast.error("Incorrect access code"); return; }
-        if (!userName.trim()) { toast.error("Please enter your name"); return; }
-        if (!teamName.trim()) { toast.error("Enter your exact team name"); return; }
-        setUserEmail?.(""); // harmless if present
-        setAuthed(true);
-        toast.success("Welcome");
-      }}
-    >
-      Enter
-    </Button>
-    <p className="text-[11px] text-neutral-500">Demo only — no real betting or payments. Data stored locally.</p>
-  </Col>
+                <Button
+                  style={{ background: PRIMARY_BLUE, color: "white" }}
+                  onClick={() => {
+                    if (accessCode !== ACCESS_CODE) {
+                      toast.error("Incorrect access code");
+                      return;
+                    }
+                    if (!userName.trim()) {
+                      toast.error("Please enter your name");
+                      return;
+                    }
+                    if (!teamName.trim()) {
+                      toast.error("Enter your exact team name");
+                      return;
+                    }
+                    setAuthed(true);
+                    toast.success("Welcome");
+                  }}
+                >
+                  Enter
+                </Button>
 
-  {/* Right logo (hidden on very small screens) */}
-  <img
-    src="/assets/localz-5yr.png"
-    alt="Localz • 5 Years"
-    className="hidden sm:block h-24 w-auto shrink-0 self-center"
-    style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}
-  />
-</Row>
-          </CardContent>
-        </Card>
+                <p className="text-[11px] text-neutral-500">
+                  Demo only — no real betting or payments. Data stored locally.
+                </p>
+              </Col>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* RIGHT: Large logo */}
+        <div className="order-1 md:order-2 flex items-center justify-center">
+          <img
+            src="/localz-5yr.png"           // ← if you used public/localz-5yr.png
+            // src="/assets/localz-5yr.png"  // ← use this if you kept it under public/assets/
+            alt="Localz • 5 Years"
+            className="w-full max-w-[520px] max-h-[420px] object-contain select-none"
+            style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
+            onError={(e) => {
+              // Helpful visual if the path is wrong
+              e.currentTarget.style.opacity = "0.5";
+              e.currentTarget.style.border = "1px dashed #bbb";
+            }}
+          />
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
 // --- Main UI ---
 if (page === "golf") {
