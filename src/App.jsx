@@ -841,6 +841,7 @@ return (
       Tap a market to open, then mark each leg as Won, Lost, or Pending. Bets settle automatically.
     </p>
     <Separator />
+    {/* this actually changes leg status */}
     <MarketList
       config={config}
       isAdmin={isAdmin}
@@ -850,7 +851,7 @@ return (
       onUpdateMarket={() => {}}
       onAddLeg={() => {}}
       onRemoveLeg={() => {}}
-      onUpdateLeg={updateLeg}   {/* this actually changes leg status */}
+      onUpdateLeg={updateLeg}
       onToggleSelect={() => {}}
       selected={[]}
     />
