@@ -828,14 +828,14 @@ return (
     <div className="mx-auto max-w-6xl relative z-0">
       {/* Header with in-flow handle (scrolls away like the title) */}
 <div className="relative mb-4 z-40">
-    {/* Header with logo + title */}
-  <Row className="justify-between gap-4 pr-14">
+  <Row className="items-center justify-between gap-4 pr-14">
     <Row className="items-center gap-3">
       <img
-        src="/assets/localz-5yr.png"
+        src="/localz-5yr.png"
         alt="Localz • 5 Years"
-        className="h-10 w-auto md:h-12 shrink-0"
-        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))" }}
+        className="h-9 w-auto md:h-10 shrink-0"
+        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.4))" }}
+        onError={(e) => (e.currentTarget.style.display = "none")}
       />
       <h1 className="text-2xl md:text-3xl font-bold">
         Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
@@ -843,35 +843,19 @@ return (
     </Row>
   </Row>
 
-  {/* Handle sits in the header, absolutely positioned; it will scroll away with the header.
-      Because tabs are sticky (z-50), they will naturally cover this as you scroll. */}
+  {/* handle button stays the same below */}
   <button
     aria-label={menuOpen ? "Close menu" : "Open menu"}
     title={menuOpen ? "Close menu" : "Open menu"}
     onClick={() => setMenuOpen((v) => !v)}
-    className="
-      absolute right-0 top-0
-      w-11 h-12
-      rounded-l-full rounded-r-none
-      flex items-center justify-center
-      shadow-md
-      z-40
-    "
-    style={{
-      background: PRIMARY_BLUE,
-      color: "white",
-      border: "none",
-    }}
+    className="absolute right-0 top-0 w-11 h-12 rounded-l-full rounded-r-none flex items-center justify-center shadow-md z-40"
+    style={{ background: PRIMARY_BLUE, color: "white", border: "none" }}
   >
     <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
       {menuOpen ? (
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 6l6 6-6 6" />
-        </svg>
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
       ) : (
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
       )}
     </span>
   </button>
@@ -948,100 +932,83 @@ return (
         </button>
       </div>
 
-            {/* Panel body (with bottom logo) */}
-      <div
-        className="p-4 flex flex-col min-h-[calc(100%-3rem)]"
-        style={{ color: theme.textOnPanel }}
+            {/* Panel body (flex column so logo can sit at bottom) */}
+<div className="p-4 h-full flex flex-col" style={{ color: theme.textOnPanel }}>
+  <div className="space-y-4">
+    <div className="text-xs opacity-90">
+      Signed in as{" "}
+      <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
+      {userEmail ? (
+        <span className="block break-all opacity-90">{userEmail}</span>
+      ) : null}
+    </div>
+
+    <Button
+      variant="outline"
+      className="w-full shadow-sm !border-0"
+      style={{ background: page === "golf" ? "#000" : "#fff", color: page === "golf" ? "#fff" : "#000" }}
+      onClick={handleLogout}
+    >
+      Log out
+    </Button>
+
+    <Button
+      className="w-full shadow-sm"
+      style={ page === "golf"
+        ? { background: PRIMARY_BLUE, color: "#ffffff" }
+        : { background: GOLD,          color: "#000000" } }
+      onClick={() => {
+        setMenuOpen(false);
+        setPage(page === "golf" ? "bet" : "golf");
+      }}
+    >
+      {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
+    </Button>
+
+    {!isAdmin ? (
+      <Button
+        className="w-full shadow-sm"
+        style={{ background: theme.buttonBg, color: theme.buttonText }}
+        onClick={() => {
+          setMenuOpen(false);
+          setShowAdminModal(true);
+        }}
       >
-        {/* TOP CONTENT (unchanged) */}
-        <div className="space-y-4">
-          <div className="text-xs opacity-90">
-            Signed in as{" "}
-            <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
-            {userEmail ? (
-              <span className="block break-all opacity-90">{userEmail}</span>
-            ) : null}
-          </div>
-
-          {/* Logout */}
-          <Button
-            variant="outline"
-            className="w-full shadow-sm !border-0"
-            style={{
-              background: page === "golf" ? "#000" : "#fff",
-              color: page === "golf" ? "#fff" : "#000",
-            }}
-            onClick={handleLogout}
-          >
-            Log out
-          </Button>
-
-          {/* Go to Pub Golf / Bet Builder switch */}
-          <Button
-            className="w-full shadow-sm"
-            style={
-              page === "golf"
-                ? { background: PRIMARY_BLUE, color: "#ffffff" }
-                : { background: GOLD, color: "#000000" }
-            }
-            onClick={() => {
-              setMenuOpen(false);
-              setPage(page === "golf" ? "bet" : "golf");
-            }}
-          >
-            {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
-          </Button>
-
-          {/* Admin actions */}
-          {!isAdmin ? (
-            <Button
-              className="w-full shadow-sm"
-              style={{ background: theme.buttonBg, color: theme.buttonText }}
-              onClick={() => {
-                setMenuOpen(false);
-                setShowAdminModal(true);
-              }}
-            >
-              Admin login
-            </Button>
-          ) : (
-            <div className="space-y-2">
-              <Badge
-                className="inline-block"
-                style={{ background: theme.brand, color: theme.textOnBrand }}
-              >
-                Admin
-              </Badge>
-              <Button
-                variant="outline"
-                className="w-full shadow-sm !border-0"
-                style={{
-                  background: page === "golf" ? "#000" : "#fff",
-                  color: page === "golf" ? "#fff" : "#000",
-                }}
-                onClick={() => {
-                  setIsAdmin(false);
-                  localStorage.removeItem(LS_ADMIN);
-                  setMenuOpen(false);
-                  toast.success("Admin disabled");
-                }}
-              >
-                Turn off admin
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* BOTTOM LOGO (centered, spaced from edges) */}
-        <div className="mt-auto pt-6 pb-2">
-          <img
-            src="/assets/localz-5yr.png"
-            alt="Localz • 5 Years"
-            className="block mx-auto w-40 md:w-48 max-w-[80%]"
-            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,.45))" }}
-          />
-        </div>
+        Admin login
+      </Button>
+    ) : (
+      <div className="space-y-2">
+        <Badge className="inline-block" style={{ background: theme.brand, color: theme.textOnBrand }}>
+          Admin
+        </Badge>
+        <Button
+          variant="outline"
+          className="w-full shadow-sm !border-0"
+          style={{ background: page === "golf" ? "#000" : "#fff", color: page === "golf" ? "#fff" : "#000" }}
+          onClick={() => {
+            setIsAdmin(false);
+            localStorage.removeItem(LS_ADMIN);
+            setMenuOpen(false);
+            toast.success("Admin disabled");
+          }}
+        >
+          Turn off admin
+        </Button>
       </div>
+    )}
+  </div>
+
+  {/* Bottom-centered logo */}
+  <div className="mt-auto pt-6 pb-2 flex justify-center">
+    <img
+      src="/localz-5yr.png"
+      alt="Localz • 5 Years"
+      className="max-w-[75%] max-h-48 object-contain"
+      style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
+      onError={(e) => (e.currentTarget.style.display = "none")}
+    />
+  </div>
+</div>
     </div>
   </div>
 </div>
@@ -2467,100 +2434,88 @@ function PubGolfPage({
         </button>
       </div>
 
-            {/* Panel body (with bottom logo) */}
-      <div
-        className="p-4 flex flex-col min-h-[calc(100%-3rem)]"
-        style={{ color: theme.textOnPanel }}
+            {/* Panel body (flex column so logo can sit at bottom) */}
+<div className="p-4 h-full flex flex-col" style={{ color: theme.textOnPanel }}>
+  <div className="space-y-4">
+    <div className="text-xs opacity-90">
+      Signed in as <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
+      {userEmail ? (<span className="block break-all opacity-90">{userEmail}</span>) : null}
+    </div>
+
+    <Button
+      variant="outline"
+      className="w-full shadow-sm !border-0"
+      style={{ background: "#000", color: "#fff" }}
+      onClick={onLogout}
+    >
+      Log out
+    </Button>
+
+    <Button
+      className="w-full shadow-sm"
+      style={{ background: PRIMARY_BLUE, color: "#ffffff" }}
+      onClick={() => {
+        setMenuOpen(false);
+        setPage("bet");
+      }}
+    >
+      Back to Bet Builder
+    </Button>
+
+    {!isAdmin ? (
+      <Button
+        className="w-full shadow-sm"
+        style={{ background: "#000", color: "#ffffff" }}
+        onClick={() => {
+          setMenuOpen(false);
+          setShowAdminModal(true);
+        }}
       >
-        {/* TOP CONTENT (unchanged) */}
-        <div className="space-y-4">
-          <div className="text-xs opacity-90">
-            Signed in as{" "}
-            <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
-            {userEmail ? (
-              <span className="block break-all opacity-90">{userEmail}</span>
-            ) : null}
-          </div>
-
-          {/* Logout */}
-          <Button
-            variant="outline"
-            className="w-full shadow-sm !border-0"
-            style={{ background: "#000", color: "#fff" }}
-            onClick={onLogout}
-          >
-            Log out
-          </Button>
-
-          {/* Back to Bet Builder */}
-          <Button
-            className="w-full shadow-sm"
-            style={{ background: PRIMARY_BLUE, color: "#ffffff" }}
-            onClick={() => {
-              setMenuOpen(false);
-              setPage("bet");
-            }}
-          >
-            Back to Bet Builder
-          </Button>
-
-          {/* Admin actions */}
-          {!isAdmin ? (
-            <Button
-              className="w-full shadow-sm"
-              style={{ background: "#000", color: "#ffffff" }}
-              onClick={() => {
-                setMenuOpen(false);
-                setShowAdminModal(true);
-              }}
-            >
-              Admin login
-            </Button>
-          ) : (
-            <div className="space-y-2">
-              <Badge
-                className="inline-block"
-                style={{ background: theme.brand, color: theme.textOnBrand }}
-              >
-                Admin
-              </Badge>
-              <Button
-                variant="outline"
-                className="w-full shadow-sm !border-0"
-                style={{ background: "#000", color: "#ffffff" }}
-                onClick={() => {
-                  setIsAdmin(false);
-                  localStorage.removeItem(LS_ADMIN);
-                  setMenuOpen(false);
-                  toast.success("Admin disabled");
-                }}
-              >
-                Turn off admin
-              </Button>
-              <Button
-                className="w-full shadow-sm"
-                style={{ background: PUBGOLF_GOLD, color: "#000" }}
-                onClick={() => {
-                  setMenuOpen(false);
-                  onClearAllScores?.();
-                }}
-              >
-                Clear all scores (round)
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* BOTTOM LOGO (centered, spaced from edges) */}
-        <div className="mt-auto pt-6 pb-2">
-          <img
-            src="/assets/localz-5yr.png"
-            alt="Localz • 5 Years"
-            className="block mx-auto w-40 md:w-48 max-w-[80%]"
-            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,.45))" }}
-          />
-        </div>
+        Admin login
+      </Button>
+    ) : (
+      <div className="space-y-2">
+        <Badge className="inline-block" style={{ background: theme.brand, color: theme.textOnBrand }}>
+          Admin
+        </Badge>
+        <Button
+          variant="outline"
+          className="w-full shadow-sm !border-0"
+          style={{ background: "#000", color: "#ffffff" }}
+          onClick={() => {
+            setIsAdmin(false);
+            localStorage.removeItem(LS_ADMIN);
+            setMenuOpen(false);
+            toast.success("Admin disabled");
+          }}
+        >
+          Turn off admin
+        </Button>
+        <Button
+          className="w-full shadow-sm"
+          style={{ background: GOLD, color: "#000" }}
+          onClick={() => {
+            setMenuOpen(false);
+            onClearAllScores?.();
+          }}
+        >
+          Clear all scores (round)
+        </Button>
       </div>
+    )}
+  </div>
+
+  {/* Bottom-centered logo */}
+  <div className="mt-auto pt-6 pb-2 flex justify-center">
+    <img
+      src="/localz-5yr.png"
+      alt="Localz • 5 Years"
+      className="max-w-[75%] max-h-48 object-contain"
+      style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
+      onError={(e) => (e.currentTarget.style.display = "none")}
+    />
+  </div>
+</div>
     </div>
   </div>
 </div>
