@@ -1206,7 +1206,6 @@ return (
       Tap a market to open, then mark each leg as Won, Lost, or Pending. Bets settle automatically.
     </p>
     <Separator />
-    {/* this actually changes leg status */}
     <MarketList
       config={config}
       isAdmin={isAdmin}
@@ -2292,12 +2291,21 @@ function PubGolfPage({
       <div className="mx-auto max-w-6xl">
         {/* Header with gold handle (scrolls with the title) */}
 <div className="relative mb-4 z-40">
-  <Row className="justify-between gap-4 pr-14">
+  <Row className="items-center gap-3 pr-14">
+    {/* Anniversary logo to the left of the title */}
+    <img
+      src="/assets/localz-5yr.png"          // public-path
+      alt="Localz • 5 Year Anniversary"
+      className="h-10 w-auto md:h-12 shrink-0"
+      style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.5))" }}
+      onError={(e) => (e.currentTarget.style.display = "none")}
+    />
+
+    {/* Title uses live round title if present */}
     <h1 className="text-2xl md:text-3xl font-bold text-white">
-      Pub Golf 2025: Cairns
+      {golfConfig?.title || "Pub Golf 2025: Cairns"}
     </h1>
   </Row>
-
   {/* Gold handle – same behavior as builder (sits in header, scrolls away) */}
   <button
     aria-label={menuOpen ? "Close menu" : "Open menu"}
