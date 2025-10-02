@@ -569,7 +569,7 @@ return (
         </h1>
       </Row>
       
-                  {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
+                        {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
       <div className="fixed inset-0 z-[120] pointer-events-none">
         {/* Backdrop (fade + click to close) */}
         <div
@@ -585,12 +585,18 @@ return (
           <div
             className="relative h-full pointer-events-auto"
             style={{
-              width: "min(90vw, 20rem)",
-              // Keep handle visible while panel is offscreen, but ensure panel itself is fully hidden
-              // by sliding the group so only the 44px handle protrudes.
-              transform: menuOpen ? "translateX(0)" : "translateX(calc(100% - 2.75rem))",
+              // CSS "variables" we use in calc() so only the handle shows when closed
+              // PANEL_W = width of the panel; HANDLE_W = width of the tab/handle
+              // Closed transform = PANEL_W - HANDLE_W (panel fully offscreen, handle visible)
+              // Open transform   = 0 (panel fully visible).
+              // NOTE: keep HANDLE_W in sync with the handle button width below (w-[2.75rem])
+              // and PANEL_W in sync with the container width below (min(90vw, 20rem)).
+              "--panelW": "min(90vw, 20rem)",
+              "--handleW": "2.75rem",
+              width: "min(90vw, 20rem)", // equals var(--panelW)
+              transform: menuOpen ? "translateX(0)" : "translateX(calc(var(--panelW) - var(--handleW)))",
               transition: "transform 300ms ease-in-out",
-              // Clip any shadow/bleed on the closed state so nothing "sticks out"
+              // Clip any panel shadow when closed so nothing "sticks out"
               overflow: menuOpen ? "visible" : "hidden",
             }}
             role="dialog"
@@ -601,22 +607,22 @@ return (
               className={`h-full ${menuOpen ? "shadow-xl" : ""}`}
               style={{
                 background: LIGHT_BLUE_BG,
-                // remove edge/border line completely
-                borderLeft: "none",
+                borderLeft: "none", // remove any black edge line
               }}
             >
-              {/* Panel header (no internal close button) */}
+              {/* Panel header: exact fixed height matches handle (h-12 => 48px) */}
               <div
-                className="relative flex items-center p-3"
+                className="relative flex items-center h-12 px-3"
                 style={{
                   background: PRIMARY_BLUE,
                   color: "white",
                   // extend header background under the tab by padding on the right
-                  paddingRight: "3.5rem",
+                  // adds a bit extra to avoid a visible “step” under the handle
+                  paddingRight: "3.75rem",
                 }}
               >
                 <div className="text-sm font-semibold">Menu</div>
-                {/* subtle divider below header to separate content, not a hard black line */}
+                {/* Soft divider, not a hard black line */}
                 <div
                   className="absolute left-0 right-0 bottom-0"
                   style={{ height: 1, background: "rgba(255,255,255,0.15)" }}
@@ -681,14 +687,15 @@ return (
               </div>
             </div>
 
-            {/* === Backwards “D” tab handle (attached and aligned with header) === */}
+            {/* === Backwards “D” tab handle (attached; aligns with header height) === */}
             <button
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               title={menuOpen ? "Close menu" : "Open menu"}
               onClick={() => setMenuOpen((v) => !v)}
               className="
                 absolute top-0
-                -left-11 w-11 h-12
+                w-[2.75rem] h-12
+                -left-[2.75rem]
                 rounded-l-full rounded-r-none
                 flex items-center justify-center
                 shadow-md
@@ -697,8 +704,7 @@ return (
               style={{
                 background: PRIMARY_BLUE,
                 color: "white",
-                // remove any border line on the handle as well
-                border: "none",
+                border: "none", // no border line on handle
               }}
             >
               {/* White circle containing the chevron (explicit blue stroke for contrast) */}
