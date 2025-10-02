@@ -568,37 +568,59 @@ return (
           Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
         </h1>
       </Row>
-
-            {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
+      
+                  {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
       <div className="fixed inset-0 z-[120] pointer-events-none">
         {/* Backdrop (fade + click to close) */}
         <div
-          className={`absolute inset-0 transition-opacity duration-300 ease-out
-                      ${menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"}`}
+          className={`absolute inset-0 transition-opacity duration-300 ease-out ${
+            menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"
+          }`}
           onClick={() => setMenuOpen(false)}
         />
 
         {/* Right-edge wrapper keeps panel + handle at the screen edge */}
         <div className="absolute top-0 right-0 h-full pointer-events-none">
-          {/* Sliding container (panel + handle move together) */}
+          {/* Sliding container (panel + handle move together so they stay attached) */}
           <div
             className="relative h-full pointer-events-auto"
             style={{
               width: "min(90vw, 20rem)",
+              // Keep handle visible while panel is offscreen, but ensure panel itself is fully hidden
+              // by sliding the group so only the 44px handle protrudes.
               transform: menuOpen ? "translateX(0)" : "translateX(calc(100% - 2.75rem))",
               transition: "transform 300ms ease-in-out",
+              // Clip any shadow/bleed on the closed state so nothing "sticks out"
+              overflow: menuOpen ? "visible" : "hidden",
             }}
             role="dialog"
             aria-label="User menu"
           >
-            {/* Panel surface */}
-            <div className="h-full shadow-xl border-l" style={{ background: LIGHT_BLUE_BG }}>
+            {/* Panel surface (no border line on the edge) */}
+            <div
+              className={`h-full ${menuOpen ? "shadow-xl" : ""}`}
+              style={{
+                background: LIGHT_BLUE_BG,
+                // remove edge/border line completely
+                borderLeft: "none",
+              }}
+            >
               {/* Panel header (no internal close button) */}
               <div
-                className="flex items-center justify-between p-3 border-b"
-                style={{ background: PRIMARY_BLUE, color: "white" }}
+                className="relative flex items-center p-3"
+                style={{
+                  background: PRIMARY_BLUE,
+                  color: "white",
+                  // extend header background under the tab by padding on the right
+                  paddingRight: "3.5rem",
+                }}
               >
                 <div className="text-sm font-semibold">Menu</div>
+                {/* subtle divider below header to separate content, not a hard black line */}
+                <div
+                  className="absolute left-0 right-0 bottom-0"
+                  style={{ height: 1, background: "rgba(255,255,255,0.15)" }}
+                />
               </div>
 
               {/* Panel body */}
@@ -611,10 +633,9 @@ return (
                   ) : null}
                 </div>
 
-                {/* Logout */}
+                {/* Logout (no outline border; faint shadow like site buttons) */}
                 <Button
-                  variant="outline"
-                  className="w-full bg-white hover:bg-neutral-50"
+                  className="w-full bg-white shadow-sm hover:bg-neutral-50"
                   onClick={() => {
                     try { localStorage.removeItem(LS_USER); } catch {}
                     try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
@@ -629,10 +650,10 @@ return (
                   Log out
                 </Button>
 
-                {/* Admin actions */}
+                {/* Admin actions (no outline borders) */}
                 {!isAdmin ? (
                   <Button
-                    className="w-full"
+                    className="w-full shadow-sm"
                     style={{ background: PRIMARY_BLUE, color: "white" }}
                     onClick={() => {
                       setMenuOpen(false);
@@ -645,8 +666,7 @@ return (
                   <div className="space-y-2">
                     <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
                     <Button
-                      variant="outline"
-                      className="w-full bg-white hover:bg-neutral-50"
+                      className="w-full bg-white shadow-sm hover:bg-neutral-50"
                       onClick={() => {
                         setIsAdmin(false);
                         localStorage.removeItem(LS_ADMIN);
@@ -661,22 +681,27 @@ return (
               </div>
             </div>
 
-            {/* === Backwards “D” tab handle (attached) === */}
+            {/* === Backwards “D” tab handle (attached and aligned with header) === */}
             <button
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               title={menuOpen ? "Close menu" : "Open menu"}
               onClick={() => setMenuOpen((v) => !v)}
               className="
-                absolute top-3
-                -left-11 w-11 h-16
+                absolute top-0
+                -left-11 w-11 h-12
                 rounded-l-full rounded-r-none
                 flex items-center justify-center
-                shadow-md border border-[#0a58ff]/30
+                shadow-md
                 pointer-events-auto
               "
-              style={{ background: PRIMARY_BLUE, color: "white" }}
+              style={{
+                background: PRIMARY_BLUE,
+                color: "white",
+                // remove any border line on the handle as well
+                border: "none",
+              }}
             >
-              {/* White circle containing the chevron */}
+              {/* White circle containing the chevron (explicit blue stroke for contrast) */}
               <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
                 {menuOpen ? (
                   // Right chevron (close)
@@ -684,7 +709,7 @@ return (
                     className="w-4 h-4"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="currentColor"
+                    stroke="#0a58ff"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -697,7 +722,7 @@ return (
                     className="w-4 h-4"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="currentColor"
+                    stroke="#0a58ff"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
