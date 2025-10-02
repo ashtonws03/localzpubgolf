@@ -998,16 +998,16 @@ return (
     )}
   </div>
 
-  {/* Bottom-centered logo */}
-  <div className="mt-auto pt-6 pb-2 flex justify-center">
-    <img
-      src="/localz-5yr.png"
-      alt="Localz • 5 Years"
-      className="max-w-[75%] max-h-48 object-contain"
-      style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
-      onError={(e) => (e.currentTarget.style.display = "none")}
-    />
-  </div>
+  {/* Middle-centered logo */}
+<div className="flex-1 flex items-center justify-center py-6">
+  <img
+    src="/localz-5yr.png"
+    alt="Localz • 5 Years"
+    className="max-w-[75%] max-h-48 object-contain"
+    style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
+    onError={(e) => (e.currentTarget.style.display = "none")}
+  />
+</div>
 </div>
     </div>
   </div>
@@ -2505,16 +2505,16 @@ function PubGolfPage({
     )}
   </div>
 
-  {/* Bottom-centered logo */}
-  <div className="mt-auto pt-6 pb-2 flex justify-center">
-    <img
-      src="/localz-5yr.png"
-      alt="Localz • 5 Years"
-      className="max-w-[75%] max-h-48 object-contain"
-      style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
-      onError={(e) => (e.currentTarget.style.display = "none")}
-    />
-  </div>
+  {/* Middle-centered logo */}
+<div className="flex-1 flex items-center justify-center py-6">
+  <img
+    src="/localz-5yr.png"
+    alt="Localz • 5 Years"
+    className="max-w-[75%] max-h-48 object-contain"
+    style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
+    onError={(e) => (e.currentTarget.style.display = "none")}
+  />
+</div>
 </div>
     </div>
   </div>
