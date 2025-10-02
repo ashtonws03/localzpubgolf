@@ -199,6 +199,7 @@ const userKey = useMemo(() => makeUserKey(userName, userEmail), [userName, userE
   const pinInputRef = useRef(null);
   // Slide-out menu (top-right)
 const [menuOpen, setMenuOpen] = useState(false);
+const [golfResetNonce, setGolfResetNonce] = useState(0);
 // Theme switches per page (bet builder vs pub golf)
 const theme = useMemo(() => (
   page === "golf"
@@ -450,7 +451,10 @@ const clearAllGolfScores = async () => {
     snap.forEach((d) => batch.delete(d.ref));
     await batch.commit();
 
-    toast.success("All Pub Golf scores cleared");
+// bump nonce so scorecard remounts (resets spinners/local state)
+setGolfResetNonce(n => n + 1);
+
+toast.success("All Pub Golf scores cleared");
   } catch (e) {
     console.error(e);
     toast.error("Failed to clear Pub Golf scores");
@@ -752,6 +756,7 @@ if (page === "golf") {
   isAdmin={isAdmin}
   onToggleLock={toggleHoleLock}
   onClearAllScores={clearAllGolfScores}
+  resetNonce={golfResetNonce}
   menuOpen={menuOpen}
   setMenuOpen={setMenuOpen}
   theme={theme}
@@ -2248,7 +2253,7 @@ function PubGolfPage({
   golfConfig, teamName, userName, userEmail, scores,
   menuOpen, setMenuOpen, theme,
   isAdmin, setIsAdmin, setShowAdminModal, setPage,
-  onLogout, onToggleLock
+  onLogout, onToggleLock, onClearAllScores, resetNonce
 }) {
   const [t, setT] = useState("scorecard"); // "scorecard" | "ladder"
     // Admin: rename hole and persist to golf_rounds/{ROUND_ID}
@@ -2458,6 +2463,7 @@ function PubGolfPage({
 
         {t === "scorecard" ? (
   <Scorecard
+    key={resetNonce}
     roundId={ROUND_ID}
     golfConfig={golfConfig}
     teamName={teamName}
