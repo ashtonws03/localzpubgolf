@@ -175,6 +175,25 @@ export default function BetBuilderApp() {
   const pinInputRef = useRef(null);
   // Slide-out menu (top-right)
 const [menuOpen, setMenuOpen] = useState(false);
+// Make the handle hide when the header scrolls out of view
+const handleSentinelRef = useRef(null);
+const [headerInView, setHeaderInView] = useState(true);
+
+useEffect(() => {
+  const el = handleSentinelRef.current;
+  if (!el) return;
+
+  const obs = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[0];
+      setHeaderInView(entry.isIntersecting);
+    },
+    { root: null, threshold: 0 } // visible if any part is on screen
+  );
+
+  obs.observe(el);
+  return () => obs.disconnect();
+}, []);
 
 // --- STATE ---
 // Config state (markets/legs) — synced with Firestore
@@ -568,6 +587,9 @@ return (
           Bet Builder · <span className="text-neutral-500">{config.eventTitle}</span>
         </h1>
       </Row>
+      {/* Sentinel that is visible only when we are at the top.
+    When this scrolls out of view, we hide the handle. */}
+<div ref={handleSentinelRef} style={{ height: 1 }} aria-hidden="true" />
       
 {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
 <div className="fixed inset-0 z-[120] pointer-events-none">
@@ -581,55 +603,42 @@ return (
 
   {/* === Handle (backwards D), always visible, sits ABOVE the panel === */}
   <button
-    aria-label={menuOpen ? "Close menu" : "Open menu"}
-    title={menuOpen ? "Close menu" : "Open menu"}
-    onClick={() => setMenuOpen((v) => !v)}
-    className="
-      fixed top-0 right-0
-      w-11 h-12
-      rounded-l-full rounded-r-none
-      flex items-center justify-center
-      shadow-md
-      pointer-events-auto
-      z-[130]           /* <- keep handle above the panel */
-    "
-    style={{
-      background: PRIMARY_BLUE,
-      color: "white",
-      border: "none",
-    }}
-  >
-    {/* White circle containing the chevron (explicit blue stroke for contrast) */}
-    <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-      {menuOpen ? (
-        // Right chevron (close)
-        <svg
-          className="w-4 h-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#0a58ff"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-      ) : (
-        // Left chevron (open)
-        <svg
-          className="w-4 h-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#0a58ff"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      )}
-    </span>
-  </button>
+  aria-label={menuOpen ? "Close menu" : "Open menu"}
+  title={menuOpen ? "Close menu" : "Open menu"}
+  onClick={() => setMenuOpen((v) => !v)}
+  className="
+    fixed right-0
+    w-11 h-12
+    rounded-l-full rounded-r-none
+    flex items-center justify-center
+    shadow-md
+    pointer-events-auto
+    z-[130]
+    transition-transform transition-opacity duration-300 ease-out
+  "
+  style={{
+    top: 0, // stay at very top-right
+    background: PRIMARY_BLUE,
+    color: "white",
+    border: "none",
+    // Slide up + fade away when you scroll down past the header
+    transform: headerInView ? "translateY(0)" : "translateY(-120%)",
+    opacity: headerInView ? 1 : 0,
+    pointerEvents: headerInView ? "auto" : "none",
+  }}
+>
+  <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+    {menuOpen ? (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#0a58ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+    )}
+  </span>
+</button>
 
   {/* === Sliding panel (fully hidden when closed) === */}
   <div
