@@ -579,7 +579,7 @@ return (
     onClick={() => setMenuOpen(false)}
   />
 
-  {/* === Handle (backwards D), always visible, attached to panel edge === */}
+  {/* === Handle (backwards D), always visible, sits ABOVE the panel === */}
   <button
     aria-label={menuOpen ? "Close menu" : "Open menu"}
     title={menuOpen ? "Close menu" : "Open menu"}
@@ -591,6 +591,7 @@ return (
       flex items-center justify-center
       shadow-md
       pointer-events-auto
+      z-[130]           /* <- keep handle above the panel */
     "
     style={{
       background: PRIMARY_BLUE,
@@ -632,7 +633,7 @@ return (
 
   {/* === Sliding panel (fully hidden when closed) === */}
   <div
-    className="fixed top-0 right-0 h-full pointer-events-auto"
+    className="fixed top-0 right-0 h-full pointer-events-auto z-[125]"
     style={{
       width: "min(90vw, 20rem)",
       transform: menuOpen ? "translateX(0)" : "translateX(100%)",
@@ -649,7 +650,7 @@ return (
         borderLeft: "none",
       }}
     >
-      {/* Header strip: exact same height as handle (h-12) and aligned at the top */}
+      {/* Header strip: same height as handle; aligned at top */}
       <div
         className="flex items-center h-12 px-3"
         style={{ background: PRIMARY_BLUE, color: "white" }}
@@ -667,9 +668,9 @@ return (
           ) : null}
         </div>
 
-        {/* Logout — no outline border; faint shadow like other site buttons */}
+        {/* Logout — force readable text color */}
         <Button
-          className="w-full bg-white shadow-sm hover:bg-neutral-50"
+          className="w-full bg-white shadow-sm hover:bg-neutral-50 text-black"
           onClick={() => {
             try { localStorage.removeItem(LS_USER); } catch {}
             try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
@@ -684,7 +685,7 @@ return (
           Log out
         </Button>
 
-        {/* Admin actions — keep soft-shadow style */}
+        {/* Admin actions — soft shadow style */}
         {!isAdmin ? (
           <Button
             className="w-full shadow-sm"
@@ -700,7 +701,7 @@ return (
           <div className="space-y-2">
             <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
             <Button
-              className="w-full bg-white shadow-sm hover:bg-neutral-50"
+              className="w-full bg-white shadow-sm hover:bg-neutral-50 text-black"
               onClick={() => {
                 setIsAdmin(false);
                 localStorage.removeItem(LS_ADMIN);
