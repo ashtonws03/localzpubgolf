@@ -569,7 +569,7 @@ return (
         </h1>
       </Row>
       
-                        {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
+          {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
       <div className="fixed inset-0 z-[120] pointer-events-none">
         {/* Backdrop (fade + click to close) */}
         <div
@@ -741,7 +741,7 @@ return (
           </div>
         </div>
       </div>
-      
+
       {/* Admin PIN Modal */}
       {showAdminModal && (
         <div
