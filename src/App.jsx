@@ -175,20 +175,24 @@ export default function BetBuilderApp() {
   const pinInputRef = useRef(null);
   // Slide-out menu (top-right)
 const [menuOpen, setMenuOpen] = useState(false);
-// Make the handle hide when the header scrolls out of view
+// Smoothly hide the handle based on how much the header is visible
 const handleSentinelRef = useRef(null);
-const [headerInView, setHeaderInView] = useState(true);
+// 0 (gone) .. 1 (fully visible)
+const [headerRatio, setHeaderRatio] = useState(1);
 
 useEffect(() => {
   const el = handleSentinelRef.current;
   if (!el) return;
 
+  // Create many thresholds so we get a smooth ratio
+  const thresholds = Array.from({ length: 101 }, (_, i) => i / 100);
+
   const obs = new IntersectionObserver(
     (entries) => {
-      const entry = entries[0];
-      setHeaderInView(entry.isIntersecting);
+      const r = entries[0]?.intersectionRatio ?? 0;
+      setHeaderRatio(r);
     },
-    { root: null, threshold: 0 } // visible if any part is on screen
+    { root: null, threshold: thresholds }
   );
 
   obs.observe(el);
@@ -614,17 +618,19 @@ return (
     shadow-md
     pointer-events-auto
     z-[130]
-    transition-transform transition-opacity duration-300 ease-out
+    transition-transform transition-opacity duration-200 ease-out
   "
   style={{
-    top: 0, // stay at very top-right
+    top: 0, // always at the very top, above the sticky tabs
     background: PRIMARY_BLUE,
     color: "white",
     border: "none",
-    // Slide up + fade away when you scroll down past the header
-    transform: headerInView ? "translateY(0)" : "translateY(-120%)",
-    opacity: headerInView ? 1 : 0,
-    pointerEvents: headerInView ? "auto" : "none",
+    // Slide amount: when headerRatio=1 → 0px; when 0 → -120% (off the top)
+    transform: `translateY(${-(1 - headerRatio) * 120}%)`,
+    // Fade in/out to match the motion
+    opacity: Math.max(0, Math.min(1, headerRatio)),
+    // Avoid “ghost” clicks while mostly gone
+    pointerEvents: headerRatio < 0.15 ? "none" : "auto",
   }}
 >
   <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
