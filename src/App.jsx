@@ -419,6 +419,17 @@ const refreshFromCloud = () => {
   // onSnapshot already keeps you live; this button is a visible "pull" action.
   toast.info("Fetching latest config from cloud…");
 };
+// Shared logout handler (used by both panels)
+const handleLogout = () => {
+  try { localStorage.removeItem(LS_USER); } catch {}
+  try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
+  setAuthed(false);
+  setUserName("");
+  setUserEmail("");
+  setAccessCode("");
+  setMenuOpen(false);
+  toast.success("Logged out");
+};
 
   // Tabs
   const [tab, setTab] = useState("builder"); // builder | slip | admin
@@ -652,11 +663,16 @@ if (page === "golf") {
   golfConfig={golfConfig}
   teamName={teamName}
   userName={userName}
+  userEmail={userEmail}
   scores={golfScores}
-  // NEW: give the golf page access to the handle/panel + theme
   menuOpen={menuOpen}
   setMenuOpen={setMenuOpen}
   theme={theme}
+  isAdmin={isAdmin}
+  setIsAdmin={setIsAdmin}
+  setShowAdminModal={setShowAdminModal}
+  setPage={setPage}
+  onLogout={handleLogout}
 />
   );
 }
@@ -796,16 +812,7 @@ return (
             background: page === "golf" ? "#000" : "#fff",
             color: page === "golf" ? "#fff" : "#000",
           }}
-          onClick={() => {
-            try { localStorage.removeItem(LS_USER); } catch {}
-            try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
-            setAuthed(false);
-            setUserName("");
-            setUserEmail("");
-            setAccessCode("");
-            setMenuOpen(false);
-            toast.success("Logged out");
-          }}
+          onClick={handleLogout}
         >
           Log out
         </Button>
@@ -2021,7 +2028,12 @@ function GolfLadder({ roundId, scores }) {
 }
 
 // ---------- Page shell ----------
-function PubGolfPage({ golfConfig, teamName, userName, scores, menuOpen, setMenuOpen, theme }) {
+function PubGolfPage({
+  golfConfig, teamName, userName, userEmail, scores,
+  menuOpen, setMenuOpen, theme,
+  isAdmin, setIsAdmin, setShowAdminModal, setPage,
+  onLogout
+}) {
   const [t, setT] = useState("scorecard"); // "scorecard" | "ladder"
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ background: PUBGOLF_BLACK }}>
@@ -2070,11 +2082,124 @@ function PubGolfPage({ golfConfig, teamName, userName, scores, menuOpen, setMenu
     </span>
   </button>
 </div>
-        <Row className="justify-between gap-4 mb-3">
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "white" }}>
-            {golfConfig.title} <span style={{ color: PUBGOLF_GOLD }}>• 5th Anniversary</span>
-          </h1>
-        </Row>
+
+{/* Slide-out side menu (golf page) */}
+<div className="fixed inset-0 z-[120] pointer-events-none">
+  {/* Backdrop */}
+  <div
+    className={`absolute inset-0 transition-opacity duration-300 ease-out ${menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0"}`}
+    style={{ background: "rgba(0,0,0,0.6)" }}
+    onClick={() => setMenuOpen(false)}
+  />
+
+  {/* Panel */}
+  <div
+    className="fixed top-0 right-0 h-full pointer-events-auto z-[125]"
+    style={{
+      width: "min(90vw, 20rem)",
+      transform: menuOpen ? "translateX(0)" : "translateX(100%)",
+      transition: "transform 300ms ease-in-out",
+    }}
+    role="dialog"
+    aria-label="User menu"
+  >
+    <div
+      className="h-full shadow-xl"
+      style={{
+        background: theme.panelBg, // near-black on golf
+        borderLeft: "none",
+        color: theme.textOnPanel,
+      }}
+    >
+      {/* Panel header bar (gold) */}
+      <div
+        className="flex items-center justify-between h-12 px-3"
+        style={{ background: theme.brand, color: theme.textOnBrand }}
+      >
+        <div className="text-sm font-semibold">Menu</div>
+
+        {/* Close button */}
+        <button
+          aria-label="Close menu"
+          title="Close"
+          onClick={() => setMenuOpen(false)}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-full shadow-sm focus:outline-none focus:ring-2"
+          style={{ background: "#000", color: "#fff" }}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Panel body */}
+      <div className="p-4 space-y-4" style={{ color: theme.textOnPanel }}>
+        <div className="text-xs opacity-90">
+          Signed in as <strong style={{ color: theme.brand }}>{userName || "—"}</strong>
+          {userEmail ? (<span className="block break-all opacity-90">{userEmail}</span>) : null}
+        </div>
+
+        {/* Logout */}
+        <Button
+          variant="outline"
+          className="w-full shadow-sm !border-0"
+          style={{ background: "#000", color: "#fff" }}
+          onClick={onLogout}
+        >
+          Log out
+        </Button>
+
+        {/* Back to Bet Builder (BLUE on the golf page) */}
+        <Button
+          className="w-full shadow-sm"
+          style={{ background: PRIMARY_BLUE, color: "#ffffff" }}
+          onClick={() => {
+            setMenuOpen(false);
+            setPage("bet");
+          }}
+        >
+          Back to Bet Builder
+        </Button>
+
+        {/* Admin actions */}
+        {!isAdmin ? (
+          <Button
+            className="w-full shadow-sm"
+            style={{ background: "#000", color: "#ffffff" }}
+            onClick={() => {
+              setMenuOpen(false);
+              setShowAdminModal(true);
+            }}
+          >
+            Admin login
+          </Button>
+        ) : (
+          <div className="space-y-2">
+            <Badge
+              className="inline-block"
+              style={{ background: theme.brand, color: theme.textOnBrand }}
+            >
+              Admin
+            </Badge>
+            <Button
+              variant="outline"
+              className="w-full shadow-sm !border-0"
+              style={{ background: "#000", color: "#ffffff" }}
+              onClick={() => {
+                setIsAdmin(false);
+                localStorage.removeItem(LS_ADMIN);
+                setMenuOpen(false);
+                toast.success("Admin disabled");
+              }}
+            >
+              Turn off admin
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Sticky tabs */}
         <div className="grid grid-cols-2 rounded-none overflow-hidden mb-3 sticky top-0 z-50 shadow-sm isolate" style={{ background: PUBGOLF_GOLD }}>
