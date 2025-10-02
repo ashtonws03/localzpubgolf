@@ -912,54 +912,58 @@ function MarketList({ config, isAdmin, onAddMarket, onRemoveMarket, onUpdateMark
         <div className="p-2 rounded-b-2xl" style={{ background: LIGHT_BLUE_BG }}>
           {(config.markets ?? []).map((m) => (
   <details key={m.id} className="py-2 group" open>
-    {/* Header row */}
-    <summary className="px-2 py-2 cursor-pointer flex items-center justify-between list-none">
-      <div className="flex items-center gap-2">
-        {/* Name bubble: white by default, darker blue on hover, stays blue when open */}
+    {/* Full-width bubble header */}
+    <summary className="list-none cursor-pointer px-2 py-2">
+      <div
+        className="
+          w-full rounded-xl border shadow-sm px-3 py-2
+          flex items-center justify-between
+          bg-white text-[#0a58ff] border-[#0a58ff]/30
+          transition-colors
+          hover:bg-[#0a58ff] hover:text-white
+          group-open:bg-[#0a58ff] group-open:text-white
+        "
+      >
+        {/* Left: market name + inactive tag */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{m.name}</span>
+          {m.active === false && (
+            <span className="rounded-full bg-neutral-200 text-neutral-800 text-[11px] px-2 py-[2px]">
+              inactive
+            </span>
+          )}
+        </div>
+
+        {/* Right: icon circle INSIDE the bubble (contrasts with bubble color) */}
         <span
           className="
-            inline-flex items-center rounded-xl border shadow-sm px-3 py-1.5 text-sm font-medium
-            bg-white text-[#0a58ff] border-[#0a58ff]/30
-            hover:bg-[#0a58ff] hover:text-white
-            group-open:bg-[#0a58ff] group-open:text-white
+            w-6 h-6 rounded-full flex items-center justify-center border
+            shadow-sm text-white bg-[#0a58ff] border-[#0a58ff]/30
             transition-colors
+            /* When bubble turns blue (hover/open), circle flips to white/blue */
+            group-hover:bg-white group-hover:text-[#0a58ff]
+            group-open:bg-white group-open:text-[#0a58ff]
           "
+          aria-hidden="true"
         >
-          {m.name}
-          {m.active === false && (
-            <span className="ml-2 rounded-full bg-neutral-200 text-neutral-800 text-[11px] px-2 py-[2px]">inactive</span>
-          )}
+          {/* Show ARROW when OPEN */}
+          <svg
+            className="w-3.5 h-3.5 hidden group-open:block"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+          {/* Show HORIZONTAL LINE when CLOSED */}
+          <svg
+            className="w-3.5 h-3.5 block group-open:hidden"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M4 12h16" />
+          </svg>
         </span>
       </div>
-
-      {/* Icon in a small contrasting circle; flips color on hover/open */}
-      <span
-        className="
-          w-6 h-6 rounded-full flex items-center justify-center border shadow-sm
-          bg-[#0a58ff] text-white border-[#0a58ff]/30
-          hover:bg-white hover:text-[#0a58ff]
-          group-open:bg-white group-open:text-[#0a58ff]
-          transition-colors
-        "
-        aria-hidden="true"
-      >
-        {/* Arrow shown when OPEN */}
-        <svg
-          className="w-3.5 h-3.5 hidden group-open:block"
-          viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-        {/* Horizontal line shown when CLOSED */}
-        <svg
-          className="w-3.5 h-3.5 block group-open:hidden"
-          viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        >
-          <path d="M4 12h16" />
-        </svg>
-      </span>
     </summary>
 
     {/* Body */}
