@@ -812,15 +812,18 @@ return (
 
         {/* Go to Pub Golf / Bet Builder switch */}
         <Button
-          className="w-full shadow-sm"
-          style={{ background: theme.buttonBg, color: theme.buttonText }}
-          onClick={() => {
-            setMenuOpen(false);
-            setPage(page === "golf" ? "builder" : "golf");
-          }}
-        >
-          {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
-        </Button>
+  className="w-full shadow-sm"
+  style={ page === "golf"
+    ? { background: PRIMARY_BLUE, color: "#ffffff" } // On golf page, “Back to Bet Builder” is BLUE
+    : { background: GOLD,          color: "#000000" } // On bet page, “Open Pub Golf” is GOLD
+  }
+  onClick={() => {
+    setMenuOpen(false);
+    setPage(page === "golf" ? "bet" : "golf"); // use "bet", not "builder"
+  }}
+>
+  {page === "golf" ? "Back to Bet Builder" : "Open Pub Golf"}
+</Button>
 
         {/* Admin actions */}
         {!isAdmin ? (
@@ -2018,7 +2021,7 @@ function GolfLadder({ roundId, scores }) {
 }
 
 // ---------- Page shell ----------
-function PubGolfPage({ golfConfig, teamName, userName, scores }) {
+function PubGolfPage({ golfConfig, teamName, userName, scores, menuOpen, setMenuOpen, theme }) {
   const [t, setT] = useState("scorecard"); // "scorecard" | "ladder"
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ background: PUBGOLF_BLACK }}>
