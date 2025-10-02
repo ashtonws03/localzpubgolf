@@ -2294,12 +2294,11 @@ function PubGolfPage({
   <Row className="items-center gap-3 pr-14">
     {/* Anniversary logo to the left of the title */}
     <img
-      src="/assets/localz-5yr.png"          // public-path
-      alt="Localz • 5 Year Anniversary"
-      className="h-10 w-auto md:h-12 shrink-0"
-      style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.5))" }}
-      onError={(e) => (e.currentTarget.style.display = "none")}
-    />
+  src="/localz-5yr.png"        // ⬅️ changed from /assets/localz-5yr.png
+  alt="Localz • 5 Year Anniversary"
+  className="h-10 w-auto md:h-12 shrink-0"
+  style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.5))" }}
+/>
 
     {/* Title uses live round title if present */}
     <h1 className="text-2xl md:text-3xl font-bold text-white">
