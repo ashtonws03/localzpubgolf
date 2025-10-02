@@ -569,141 +569,147 @@ return (
         </h1>
       </Row>
 
-      {/* Slide-out side menu + attached top-right handle (animated) */}
-<div className="fixed inset-0 z-[120] pointer-events-none">
-  {/* Backdrop (fade, clickable) */}
-  <div
-    className={`absolute inset-0 transition-opacity duration-300 ease-out
-                ${menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"}`}
-    onClick={() => setMenuOpen(false)}
-  />
+            {/* Slide-out side menu + attached top-right handle (animated, “backwards D” tab) */}
+      <div className="fixed inset-0 z-[120] pointer-events-none">
+        {/* Backdrop (fade + click to close) */}
+        <div
+          className={`absolute inset-0 transition-opacity duration-300 ease-out
+                      ${menuOpen ? "opacity-100 pointer-events-auto bg-black/40" : "opacity-0"}`}
+          onClick={() => setMenuOpen(false)}
+        />
 
-  {/* Right-edge wrapper keeps panel + handle at screen edge */}
-  <div className="absolute top-0 right-0 h-full pointer-events-none">
-    {/* Sliding container (panel + handle together) */}
-    <div
-      className={`
-        relative h-full
-        transition-transform duration-300 ease-in-out
-        pointer-events-auto
-        ${menuOpen ? "translate-x-0" : "translate-x-full"}
-      `}
-      style={{ width: "min(90vw, 20rem)" }}
-      role="dialog"
-      aria-label="User menu"
-    >
-      {/* Panel surface */}
-      <div className="h-full shadow-xl border-l" style={{ background: LIGHT_BLUE_BG }}>
-        {/* Panel header (no close arrow inside) */}
-        <div className="flex items-center justify-between p-3 border-b" style={{ background: PRIMARY_BLUE, color: "white" }}>
-          <div className="text-sm font-semibold">Menu</div>
-        </div>
-
-        {/* Panel body */}
-        <div className="p-4 space-y-4">
-          <div className="text-xs text-neutral-700">
-            Signed in as{" "}
-            <strong className="text-[#0a58ff]">{userName || "—"}</strong>
-            {userEmail ? (
-              <span className="block text-neutral-600 break-all">{userEmail}</span>
-            ) : null}
-          </div>
-
-          {/* Logout */}
-          <Button
-            variant="outline"
-            className="w-full bg-white hover:bg-neutral-50"
-            onClick={() => {
-              try { localStorage.removeItem(LS_USER); } catch {}
-              try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
-              setAuthed(false);
-              setUserName("");
-              setUserEmail("");
-              setAccessCode("");
-              setMenuOpen(false);
-              toast.success("Logged out");
+        {/* Right-edge wrapper keeps panel + handle at the screen edge */}
+        <div className="absolute top-0 right-0 h-full pointer-events-none">
+          {/* Sliding container (panel + handle move together) */}
+          <div
+            className="relative h-full pointer-events-auto"
+            style={{
+              width: "min(90vw, 20rem)",
+              transform: menuOpen ? "translateX(0)" : "translateX(calc(100% - 2.75rem))",
+              transition: "transform 300ms ease-in-out",
             }}
+            role="dialog"
+            aria-label="User menu"
           >
-            Log out
-          </Button>
-
-          {/* Admin actions */}
-          {!isAdmin ? (
-            <Button
-              className="w-full"
-              style={{ background: PRIMARY_BLUE, color: "white" }}
-              onClick={() => {
-                setMenuOpen(false);
-                setShowAdminModal(true);
-              }}
-            >
-              Admin login
-            </Button>
-          ) : (
-            <div className="space-y-2">
-              <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
-              <Button
-                variant="outline"
-                className="w-full bg-white hover:bg-neutral-50"
-                onClick={() => {
-                  setIsAdmin(false);
-                  localStorage.removeItem(LS_ADMIN);
-                  setMenuOpen(false);
-                  toast.success("Admin disabled");
-                }}
+            {/* Panel surface */}
+            <div className="h-full shadow-xl border-l" style={{ background: LIGHT_BLUE_BG }}>
+              {/* Panel header (no internal close button) */}
+              <div
+                className="flex items-center justify-between p-3 border-b"
+                style={{ background: PRIMARY_BLUE, color: "white" }}
               >
-                Turn off admin
-              </Button>
+                <div className="text-sm font-semibold">Menu</div>
+              </div>
+
+              {/* Panel body */}
+              <div className="p-4 space-y-4">
+                <div className="text-xs text-neutral-700">
+                  Signed in as{" "}
+                  <strong className="text-[#0a58ff]">{userName || "—"}</strong>
+                  {userEmail ? (
+                    <span className="block text-neutral-600 break-all">{userEmail}</span>
+                  ) : null}
+                </div>
+
+                {/* Logout */}
+                <Button
+                  variant="outline"
+                  className="w-full bg-white hover:bg-neutral-50"
+                  onClick={() => {
+                    try { localStorage.removeItem(LS_USER); } catch {}
+                    try { localStorage.removeItem(LS_MARKET_STATE); } catch {}
+                    setAuthed(false);
+                    setUserName("");
+                    setUserEmail("");
+                    setAccessCode("");
+                    setMenuOpen(false);
+                    toast.success("Logged out");
+                  }}
+                >
+                  Log out
+                </Button>
+
+                {/* Admin actions */}
+                {!isAdmin ? (
+                  <Button
+                    className="w-full"
+                    style={{ background: PRIMARY_BLUE, color: "white" }}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setShowAdminModal(true);
+                    }}
+                  >
+                    Admin login
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <Badge className="bg-[var(--accent-yellow,#ffd200)] text-black">Admin</Badge>
+                    <Button
+                      variant="outline"
+                      className="w-full bg-white hover:bg-neutral-50"
+                      onClick={() => {
+                        setIsAdmin(false);
+                        localStorage.removeItem(LS_ADMIN);
+                        setMenuOpen(false);
+                        toast.success("Admin disabled");
+                      }}
+                    >
+                      Turn off admin
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+
+            {/* === Backwards “D” tab handle (attached) === */}
+            <button
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              title={menuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setMenuOpen((v) => !v)}
+              className="
+                absolute top-3
+                -left-11 w-11 h-16
+                rounded-l-full rounded-r-none
+                flex items-center justify-center
+                shadow-md border border-[#0a58ff]/30
+                pointer-events-auto
+              "
+              style={{ background: PRIMARY_BLUE, color: "white" }}
+            >
+              {/* White circle containing the chevron */}
+              <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                {menuOpen ? (
+                  // Right chevron (close)
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                ) : (
+                  // Left chevron (open)
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                )}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* Small circular handle attached to panel, top-right */}
-      <button
-        aria-label={menuOpen ? "Close menu" : "Open menu"}
-        onClick={() => setMenuOpen((v) => !v)}
-        className="
-          absolute top-4 -left-5
-          w-10 h-10 rounded-full
-          flex items-center justify-center
-          shadow-sm border border-[#0a58ff]/30
-          pointer-events-auto
-          transition-transform duration-300 ease-in-out
-        "
-        style={{ background: PRIMARY_BLUE, color: "white" }}
-        title={menuOpen ? "Close menu" : "Open menu"}
-      >
-        {/* Chevron flips: left = closed, right = open */}
-        {menuOpen ? (
-          <svg
-            className="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        ) : (
-          <svg
-            className="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        )}
-      </button>
-    </div>
-  </div>
-</div>
 
       {/* Admin PIN Modal */}
       {showAdminModal && (
