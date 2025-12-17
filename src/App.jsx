@@ -366,7 +366,7 @@ export default function PubGolfApp() {
 
           <div className="order-1 md:order-2 flex items-center justify-center">
             <img
-              src="/localz-5yr.png"
+              src="/PubGolf25Logo.png"
               alt="Localz • 5 Years"
               className="w-full max-w-[520px] max-h-[420px] object-contain select-none"
               style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
@@ -887,7 +887,7 @@ function PubGolfPage({
         <div className="relative mb-4 z-40">
           <Row className="items-center gap-3 pr-14">
             <img
-              src="/localz-5yr.png"
+              src="/PubGolf25Logo.png"
               alt="Localz • 5 Year Anniversary"
               className="h-10 w-auto md:h-12 shrink-0"
               style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.5))" }}
@@ -1022,7 +1022,7 @@ function PubGolfPage({
 
                 <div className="flex-1 flex items-center justify-center py-6">
                   <img
-                    src="/localz-5yr.png"
+                    src="/PubGolf25Logo.png"
                     alt="Localz • 5 Years"
                     className="max-w-[75%] max-h-48 object-contain"
                     style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,.25))" }}
