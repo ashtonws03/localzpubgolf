@@ -4,8 +4,10 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   where,
@@ -96,6 +98,50 @@ function scoreDocumentId(roundId, teamId, holeId) {
 
 function teamDocumentId(roundId, teamId) {
   return `${roundId}__${teamId}`;
+}
+
+function sortTeamsByName(teams) {
+  return [...teams].sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || "")),
+  );
+}
+
+function buildPlayerTeamState(teams) {
+  const playerTeamMap = {};
+  const conflictMap = new Map();
+
+  for (const team of teams) {
+    for (const memberId of team.memberIds || []) {
+      const existingTeamId = playerTeamMap[memberId];
+      if (existingTeamId && existingTeamId !== team.teamId) {
+        const teamIds = conflictMap.get(memberId) || new Set([existingTeamId]);
+        teamIds.add(team.teamId);
+        conflictMap.set(memberId, teamIds);
+      } else if (!existingTeamId) {
+        playerTeamMap[memberId] = team.teamId;
+      }
+    }
+  }
+
+  const conflicts = Array.from(conflictMap.entries()).map(
+    ([playerId, teamIds]) => ({
+      playerId,
+      teamIds: Array.from(teamIds),
+    }),
+  );
+
+  return { playerTeamMap, conflicts };
+}
+
+async function fetchRoundTeamsFromServer() {
+  const teamsQuery = query(
+    collection(db, "golf_teams"),
+    where("roundId", "==", ROUND_ID),
+  );
+  const snapshot = await getDocsFromServer(teamsQuery);
+  return sortTeamsByName(
+    snapshot.docs.map((teamDoc) => ({ id: teamDoc.id, ...teamDoc.data() })),
+  );
 }
 
 function createTeamId() {
@@ -369,6 +415,11 @@ export default function PubGolfApp() {
   });
   const [teams, setTeams] = useState([]);
   const [scores, setScores] = useState([]);
+  const [roundLoaded, setRoundLoaded] = useState(false);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [scoresLoaded, setScoresLoaded] = useState(false);
+  const [syncError, setSyncError] = useState("");
+  const teamMutationRef = useRef(false);
   const pinInputRef = useRef(null);
 
   const currentPlayer = PLAYER_BY_ID[playerId] || null;
@@ -380,61 +431,108 @@ export default function PubGolfApp() {
     [playerId, teams],
   );
 
+  const dataReady = roundLoaded && teamsLoaded && scoresLoaded;
+
   useEffect(() => {
     if (showAdminModal) pinInputRef.current?.focus();
   }, [showAdminModal]);
 
   useEffect(() => {
     const roundRef = doc(db, "golf_rounds", ROUND_ID);
-    const unsubscribe = onSnapshot(roundRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setGolfConfig({
-          title: data.title || DEFAULT_TITLE,
-          location: data.location || DEFAULT_LOCATION,
-          year: Math.round(Number(data.year) || DEFAULT_YEAR),
-          holes: normalizeHoles(data.holes),
-          bonusRules: normalizeRules(data.bonusRules, DEFAULT_BONUS_RULES),
-          penaltyRules: normalizeRules(data.penaltyRules, DEFAULT_PENALTY_RULES),
-        });
-      } else {
-        setDoc(roundRef, {
-          title: DEFAULT_TITLE,
-          location: DEFAULT_LOCATION,
-          year: DEFAULT_YEAR,
-          holes: defaultHoles,
-          bonusRules: DEFAULT_BONUS_RULES,
-          penaltyRules: DEFAULT_PENALTY_RULES,
-          createdAt: serverTimestamp(),
-        }).catch((error) => {
-          console.error(error);
-          toast.error("The event could not be created in Firebase.");
-        });
-      }
-    });
+    const unsubscribe = onSnapshot(
+      roundRef,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setGolfConfig({
+            title: data.title || DEFAULT_TITLE,
+            location: data.location || DEFAULT_LOCATION,
+            year: Math.round(Number(data.year) || DEFAULT_YEAR),
+            holes: normalizeHoles(data.holes),
+            bonusRules: normalizeRules(data.bonusRules, DEFAULT_BONUS_RULES),
+            penaltyRules: normalizeRules(data.penaltyRules, DEFAULT_PENALTY_RULES),
+          });
+        } else if (!snapshot.metadata.fromCache) {
+          setDoc(roundRef, {
+            title: DEFAULT_TITLE,
+            location: DEFAULT_LOCATION,
+            year: DEFAULT_YEAR,
+            holes: defaultHoles,
+            bonusRules: DEFAULT_BONUS_RULES,
+            penaltyRules: DEFAULT_PENALTY_RULES,
+            playerTeamMap: {},
+            createdAt: serverTimestamp(),
+          }).catch((error) => {
+            console.error(error);
+            setSyncError("The event could not be created in Firebase.");
+          });
+        }
+
+        if (!snapshot.metadata.fromCache) {
+          setRoundLoaded(true);
+        }
+      },
+      (error) => {
+        console.error(error);
+        setSyncError("The event details could not be loaded from Firebase.");
+      },
+    );
 
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "golf_teams"), (snapshot) => {
-      const nextTeams = snapshot.docs
-        .map((teamDoc) => ({ id: teamDoc.id, ...teamDoc.data() }))
-        .filter((team) => team.roundId === ROUND_ID)
-        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
-      setTeams(nextTeams);
-    });
+    const teamsQuery = query(
+      collection(db, "golf_teams"),
+      where("roundId", "==", ROUND_ID),
+    );
+    const unsubscribe = onSnapshot(
+      teamsQuery,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const nextTeams = sortTeamsByName(
+          snapshot.docs.map((teamDoc) => ({ id: teamDoc.id, ...teamDoc.data() })),
+        );
+        setTeams(nextTeams);
+
+        if (!snapshot.metadata.fromCache) {
+          setTeamsLoaded(true);
+        }
+      },
+      (error) => {
+        console.error(error);
+        setSyncError("Teams could not be loaded from Firebase.");
+      },
+    );
 
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "golf_scores"), (snapshot) => {
-      const nextScores = snapshot.docs
-        .map((scoreDoc) => ({ id: scoreDoc.id, ...scoreDoc.data() }))
-        .filter((score) => score.roundId === ROUND_ID);
-      setScores(nextScores);
-    });
+    const scoresQuery = query(
+      collection(db, "golf_scores"),
+      where("roundId", "==", ROUND_ID),
+    );
+    const unsubscribe = onSnapshot(
+      scoresQuery,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const nextScores = snapshot.docs.map((scoreDoc) => ({
+          id: scoreDoc.id,
+          ...scoreDoc.data(),
+        }));
+        setScores(nextScores);
+
+        if (!snapshot.metadata.fromCache) {
+          setScoresLoaded(true);
+        }
+      },
+      (error) => {
+        console.error(error);
+        setSyncError("Scores could not be loaded from Firebase.");
+      },
+    );
 
     return () => unsubscribe();
   }, []);
@@ -788,44 +886,157 @@ export default function PubGolfApp() {
     }
   };
 
+  const beginTeamMutation = () => {
+    if (teamMutationRef.current) {
+      toast.info("A team change is already being saved.");
+      return false;
+    }
+    teamMutationRef.current = true;
+    return true;
+  };
+
+  const endTeamMutation = () => {
+    teamMutationRef.current = false;
+  };
+
   const createTeam = async (memberIds) => {
-    if (!isAdmin) return;
+    if (!isAdmin) return false;
+    if (!teamsLoaded) {
+      toast.error("Please wait for the current teams to finish syncing.");
+      return false;
+    }
 
     const cleanMemberIds = [...new Set(memberIds.filter(Boolean))];
     if (cleanMemberIds.length < 1 || cleanMemberIds.length > 2) {
       toast.error("A team must contain one or two players.");
-      return;
+      return false;
     }
 
-    const alreadyAssigned = cleanMemberIds.find((memberId) =>
-      teams.some((team) => team.memberIds?.includes(memberId)),
-    );
-    if (alreadyAssigned) {
-      toast.error(`${PLAYER_BY_ID[alreadyAssigned]?.name || "That player"} is already on a team.`);
-      return;
-    }
-
-    const teamId = createTeamId();
-    const name = makeDefaultTeamName(cleanMemberIds);
+    if (!beginTeamMutation()) return false;
 
     try {
-      await setDoc(doc(db, "golf_teams", teamDocumentId(ROUND_ID, teamId)), {
-        roundId: ROUND_ID,
-        teamId,
-        name,
-        memberIds: cleanMemberIds,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const liveTeams = await fetchRoundTeamsFromServer();
+      const { playerTeamMap: livePlayerTeamMap, conflicts } =
+        buildPlayerTeamState(liveTeams);
+
+      if (conflicts.length) {
+        toast.error(
+          "Duplicate player assignments already exist. Disband the incorrect duplicate team before creating another team.",
+        );
+        return false;
+      }
+
+      const alreadyAssigned = cleanMemberIds.find(
+        (memberId) => livePlayerTeamMap[memberId],
+      );
+      if (alreadyAssigned) {
+        toast.error(
+          `${PLAYER_BY_ID[alreadyAssigned]?.name || "That player"} is already on a team.`,
+        );
+        return false;
+      }
+
+      const memberSignature = [...cleanMemberIds].sort().join("|");
+      const matchingTeam = liveTeams.find(
+        (liveTeam) =>
+          [...(liveTeam.memberIds || [])].sort().join("|") === memberSignature,
+      );
+      if (matchingTeam) {
+        toast.error("That exact team has already been created.");
+        return false;
+      }
+
+      const teamId = createTeamId();
+      const baseName = makeDefaultTeamName(cleanMemberIds);
+      const usedNames = new Set(
+        liveTeams.map((liveTeam) =>
+          String(liveTeam.name || "").trim().toLowerCase(),
+        ),
+      );
+      let name = baseName;
+      let suffix = 2;
+      while (usedNames.has(name.toLowerCase())) {
+        name = `${baseName} ${suffix}`;
+        suffix += 1;
+      }
+
+      const roundRef = doc(db, "golf_rounds", ROUND_ID);
+      const teamRef = doc(
+        db,
+        "golf_teams",
+        teamDocumentId(ROUND_ID, teamId),
+      );
+
+      await runTransaction(db, async (transaction) => {
+        const roundSnapshot = await transaction.get(roundRef);
+        const storedPlayerTeamMap =
+          roundSnapshot.exists() &&
+          roundSnapshot.data()?.playerTeamMap &&
+          typeof roundSnapshot.data().playerTeamMap === "object"
+            ? roundSnapshot.data().playerTeamMap
+            : {};
+        const effectivePlayerTeamMap = {
+          ...livePlayerTeamMap,
+          ...storedPlayerTeamMap,
+        };
+
+        const assignedDuringSave = cleanMemberIds.find(
+          (memberId) => effectivePlayerTeamMap[memberId],
+        );
+        if (assignedDuringSave) {
+          const error = new Error("PLAYER_ALREADY_ASSIGNED");
+          error.playerId = assignedDuringSave;
+          throw error;
+        }
+
+        const nextPlayerTeamMap = { ...effectivePlayerTeamMap };
+        cleanMemberIds.forEach((memberId) => {
+          nextPlayerTeamMap[memberId] = teamId;
+        });
+
+        transaction.set(teamRef, {
+          roundId: ROUND_ID,
+          teamId,
+          name,
+          memberIds: cleanMemberIds,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        transaction.set(
+          roundRef,
+          {
+            playerTeamMap: nextPlayerTeamMap,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
       });
+
       toast.success(`${name} created`);
+      return true;
     } catch (error) {
       console.error(error);
-      toast.error("The team could not be created.");
+      if (error?.message === "PLAYER_ALREADY_ASSIGNED") {
+        toast.error(
+          `${PLAYER_BY_ID[error.playerId]?.name || "That player"} was assigned to another team while this page was syncing. Refreshing is not required; wait a moment and try again.`,
+        );
+      } else {
+        toast.error(
+          "The team could not be created. The current Firebase team list was not changed.",
+        );
+      }
+      return false;
+    } finally {
+      endTeamMutation();
     }
   };
 
   const updateTeam = async (team, changes, { skipConfirm = false } = {}) => {
-    if (!team?.teamId) return;
+    if (!team?.teamId) return false;
+    if (!teamsLoaded) {
+      toast.error("Please wait for the current teams to finish syncing.");
+      return false;
+    }
 
     const nextName = String(changes.name ?? team.name ?? "").trim();
     const nextMemberIds = [
@@ -834,35 +1045,11 @@ export default function PubGolfApp() {
 
     if (!nextName) {
       toast.error("The team name cannot be empty.");
-      return;
+      return false;
     }
     if (nextMemberIds.length < 1 || nextMemberIds.length > 2) {
       toast.error("A team must contain one or two players.");
-      return;
-    }
-
-    const duplicateName = teams.some(
-      (otherTeam) =>
-        otherTeam.teamId !== team.teamId &&
-        String(otherTeam.name || "").trim().toLowerCase() === nextName.toLowerCase(),
-    );
-    if (duplicateName) {
-      toast.error("Another team is already using that team name.");
-      return;
-    }
-
-    const playerOnAnotherTeam = nextMemberIds.find((memberId) =>
-      teams.some(
-        (otherTeam) =>
-          otherTeam.teamId !== team.teamId &&
-          otherTeam.memberIds?.includes(memberId),
-      ),
-    );
-    if (playerOnAnotherTeam) {
-      toast.error(
-        `${PLAYER_BY_ID[playerOnAnotherTeam]?.name || "That player"} is already on another team.`,
-      );
-      return;
+      return false;
     }
 
     const membershipChanged =
@@ -876,44 +1063,209 @@ export default function PubGolfApp() {
       const confirmed = window.confirm(
         "This team already has confirmed scores. The scores will stay with the team after you change its players. Continue?",
       );
-      if (!confirmed) return;
+      if (!confirmed) return false;
     }
 
+    if (!beginTeamMutation()) return false;
+
     try {
-      await setDoc(
-        doc(db, "golf_teams", teamDocumentId(ROUND_ID, team.teamId)),
-        {
-          name: nextName,
-          memberIds: nextMemberIds,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
+      const liveTeams = await fetchRoundTeamsFromServer();
+      const liveTeam =
+        liveTeams.find((liveItem) => liveItem.teamId === team.teamId) || team;
+      const duplicateName = liveTeams.some(
+        (otherTeam) =>
+          otherTeam.teamId !== team.teamId &&
+          String(otherTeam.name || "").trim().toLowerCase() ===
+            nextName.toLowerCase(),
       );
+      if (duplicateName) {
+        toast.error("Another team is already using that team name.");
+        return false;
+      }
+
+      const liveMembershipChanged =
+        [...(liveTeam.memberIds || [])].sort().join("|") !==
+        [...nextMemberIds].sort().join("|");
+      if (!liveMembershipChanged) {
+        await setDoc(
+          doc(db, "golf_teams", teamDocumentId(ROUND_ID, team.teamId)),
+          { name: nextName, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        toast.success("Team updated");
+        return true;
+      }
+
+      const playerOnAnotherTeam = nextMemberIds.find((memberId) =>
+        liveTeams.some(
+          (otherTeam) =>
+            otherTeam.teamId !== team.teamId &&
+            otherTeam.memberIds?.includes(memberId),
+        ),
+      );
+      if (playerOnAnotherTeam) {
+        toast.error(
+          `${PLAYER_BY_ID[playerOnAnotherTeam]?.name || "That player"} is already on another team.`,
+        );
+        return false;
+      }
+
+      const { playerTeamMap: livePlayerTeamMap } =
+        buildPlayerTeamState(liveTeams);
+      const roundRef = doc(db, "golf_rounds", ROUND_ID);
+      const teamRef = doc(
+        db,
+        "golf_teams",
+        teamDocumentId(ROUND_ID, team.teamId),
+      );
+
+      await runTransaction(db, async (transaction) => {
+        const [roundSnapshot, teamSnapshot] = await Promise.all([
+          transaction.get(roundRef),
+          transaction.get(teamRef),
+        ]);
+        if (!teamSnapshot.exists()) {
+          throw new Error("TEAM_NO_LONGER_EXISTS");
+        }
+
+        const storedPlayerTeamMap =
+          roundSnapshot.exists() &&
+          roundSnapshot.data()?.playerTeamMap &&
+          typeof roundSnapshot.data().playerTeamMap === "object"
+            ? roundSnapshot.data().playerTeamMap
+            : {};
+        const nextPlayerTeamMap = {
+          ...livePlayerTeamMap,
+          ...storedPlayerTeamMap,
+        };
+        const currentMemberIds =
+          teamSnapshot.data()?.memberIds || liveTeam.memberIds || [];
+
+        currentMemberIds.forEach((memberId) => {
+          if (nextPlayerTeamMap[memberId] === team.teamId) {
+            delete nextPlayerTeamMap[memberId];
+          }
+        });
+
+        const assignedDuringSave = nextMemberIds.find(
+          (memberId) =>
+            nextPlayerTeamMap[memberId] &&
+            nextPlayerTeamMap[memberId] !== team.teamId,
+        );
+        if (assignedDuringSave) {
+          const error = new Error("PLAYER_ALREADY_ASSIGNED");
+          error.playerId = assignedDuringSave;
+          throw error;
+        }
+
+        nextMemberIds.forEach((memberId) => {
+          nextPlayerTeamMap[memberId] = team.teamId;
+        });
+
+        transaction.set(
+          teamRef,
+          {
+            name: nextName,
+            memberIds: nextMemberIds,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          roundRef,
+          {
+            playerTeamMap: nextPlayerTeamMap,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
+
       toast.success("Team updated");
+      return true;
     } catch (error) {
       console.error(error);
-      toast.error("The team could not be updated.");
+      if (error?.message === "PLAYER_ALREADY_ASSIGNED") {
+        toast.error(
+          `${PLAYER_BY_ID[error.playerId]?.name || "That player"} was assigned to another team while this change was being saved.`,
+        );
+      } else if (error?.message === "TEAM_NO_LONGER_EXISTS") {
+        toast.error("That team no longer exists in Firebase.");
+      } else {
+        toast.error("The team could not be updated.");
+      }
+      return false;
+    } finally {
+      endTeamMutation();
     }
   };
 
   const deleteTeam = async (team) => {
-    if (!isAdmin || !team?.teamId) return;
+    if (!isAdmin || !team?.teamId) return false;
 
     const hasScores = scores.some((score) => score.teamId === team.teamId);
     const message = hasScores
       ? `Disband ${team.name}? Its existing scores will be kept in Firebase but will no longer appear on the ladder.`
       : `Disband ${team.name}?`;
 
-    if (!window.confirm(message)) return;
+    if (!window.confirm(message)) return false;
+    if (!beginTeamMutation()) return false;
 
     try {
-      await deleteDoc(
-        doc(db, "golf_teams", teamDocumentId(ROUND_ID, team.teamId)),
+      const liveTeams = await fetchRoundTeamsFromServer();
+      const { playerTeamMap: livePlayerTeamMap } = buildPlayerTeamState(liveTeams);
+      const roundRef = doc(db, "golf_rounds", ROUND_ID);
+      const teamRef = doc(
+        db,
+        "golf_teams",
+        teamDocumentId(ROUND_ID, team.teamId),
       );
+
+      await runTransaction(db, async (transaction) => {
+        const [roundSnapshot, teamSnapshot] = await Promise.all([
+          transaction.get(roundRef),
+          transaction.get(teamRef),
+        ]);
+        const storedPlayerTeamMap =
+          roundSnapshot.exists() &&
+          roundSnapshot.data()?.playerTeamMap &&
+          typeof roundSnapshot.data().playerTeamMap === "object"
+            ? roundSnapshot.data().playerTeamMap
+            : {};
+        const nextPlayerTeamMap = {
+          ...livePlayerTeamMap,
+          ...storedPlayerTeamMap,
+        };
+        const memberIds =
+          teamSnapshot.exists()
+            ? teamSnapshot.data()?.memberIds || []
+            : team.memberIds || [];
+
+        memberIds.forEach((memberId) => {
+          if (nextPlayerTeamMap[memberId] === team.teamId) {
+            delete nextPlayerTeamMap[memberId];
+          }
+        });
+
+        transaction.delete(teamRef);
+        transaction.set(
+          roundRef,
+          {
+            playerTeamMap: nextPlayerTeamMap,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
+
       toast.success("Team disbanded");
+      return true;
     } catch (error) {
       console.error(error);
       toast.error("The team could not be disbanded.");
+      return false;
+    } finally {
+      endTeamMutation();
     }
   };
 
@@ -950,7 +1302,17 @@ export default function PubGolfApp() {
         loginCode={loginCode}
         setLoginCode={setLoginCode}
         onLogin={handlePlayerLogin}
-        location={golfConfig.location || DEFAULT_LOCATION}
+      />
+    );
+  }
+
+  if (!dataReady) {
+    return (
+      <DataSyncScreen
+        error={syncError}
+        roundLoaded={roundLoaded}
+        teamsLoaded={teamsLoaded}
+        scoresLoaded={scoresLoaded}
       />
     );
   }
@@ -1044,7 +1406,7 @@ function LoginScreen({ loginCode, setLoginCode, onLogin, location }) {
         <div className="order-1 flex flex-col items-center justify-center text-center lg:order-2">
           <div className="logo-halo">
             <img
-              src="/localz-auckland-2026.svg"
+              src="/localz-auckland-2026.png"
               alt="Pub Golf"
               className="relative z-10 max-h-[290px] w-full max-w-[420px] object-contain"
             />
@@ -1053,6 +1415,51 @@ function LoginScreen({ loginCode, setLoginCode, onLogin, location }) {
             {location}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DataSyncScreen({ error, roundLoaded, teamsLoaded, scoresLoaded }) {
+  const status = !roundLoaded
+    ? "Loading event settings"
+    : !teamsLoaded
+      ? "Loading current teams"
+      : !scoresLoaded
+        ? "Loading saved scores"
+        : "Finishing sync";
+
+  return (
+    <div className="app-shell flex min-h-screen items-center justify-center px-4 py-10">
+      <PremiumBackground />
+      <div className="relative z-10 w-full max-w-md">
+        <PremiumCard className="p-6 text-center sm:p-8">
+          <img
+            src="/localz-auckland-2026.png"
+            alt="Pub Golf"
+            className="mx-auto h-32 w-auto object-contain sm:h-40"
+          />
+          {error ? (
+            <>
+              <h1 className="mt-5 text-2xl font-black text-white">
+                Unable to sync event data
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-blue-100/70">{error}</p>
+              <Button className="mt-5 w-full" onClick={() => window.location.reload()}>
+                Try again
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto mt-5 h-9 w-9 animate-spin rounded-full border-2 border-amber-200/25 border-t-amber-200" />
+              <h1 className="mt-4 text-xl font-black text-white">Syncing event data</h1>
+              <p className="mt-2 text-sm text-blue-100/65">{status}…</p>
+              <p className="mt-3 text-xs leading-5 text-blue-100/45">
+                The scorecard and team manager will open only after the latest Firebase data has loaded.
+              </p>
+            </>
+          )}
+        </PremiumCard>
       </div>
     </div>
   );
@@ -1159,7 +1566,7 @@ function PubGolfPage({
         <header className="mb-4 flex items-center justify-between gap-3">
           <Row className="min-w-0 gap-3">
             <img
-              src="/localz-auckland-2026.svg"
+              src="/localz-auckland-2026.png"
               alt="Pub Golf"
               className="h-11 w-auto shrink-0 object-contain sm:h-14"
             />
@@ -1359,7 +1766,7 @@ function SideMenu({
 
           <div className="mt-auto flex justify-center pb-4 pt-8">
             <img
-              src="/localz-auckland-2026.svg"
+              src="/localz-auckland-2026.png"
               alt="Pub Golf"
               className="max-h-40 max-w-[75%] object-contain opacity-90"
             />
@@ -2653,6 +3060,10 @@ function AdminTeamManager({
     () => new Set(teams.flatMap((team) => team.memberIds || [])),
     [teams],
   );
+  const duplicateAssignments = useMemo(
+    () => buildPlayerTeamState(teams).conflicts,
+    [teams],
+  );
   const unassignedPlayers = PLAYERS.filter((player) => !assignedIds.has(player.id));
   const [firstPlayerId, setFirstPlayerId] = useState("");
   const [secondPlayerId, setSecondPlayerId] = useState("");
@@ -2677,9 +3088,11 @@ function AdminTeamManager({
       return;
     }
 
-    await onCreateTeam(
+    const created = await onCreateTeam(
       soloTeam ? [firstPlayerId] : [firstPlayerId, secondPlayerId],
     );
+    if (!created) return;
+
     setFirstPlayerId("");
     setSecondPlayerId("");
     setSoloTeam(false);
@@ -2687,6 +3100,37 @@ function AdminTeamManager({
 
   return (
     <div className="space-y-5">
+      {duplicateAssignments.length ? (
+        <PremiumCard className="border-red-400/45 p-5 sm:p-6">
+          <div className="section-eyebrow text-red-200">Duplicate assignment detected</div>
+          <h2 className="mt-1 text-xl font-black text-white">
+            A player is currently listed on more than one team
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-blue-100/70">
+            New team creation is blocked until the incorrect duplicate team is disbanded below.
+          </p>
+          <div className="mt-4 space-y-2">
+            {duplicateAssignments.map((conflict) => {
+              const player = PLAYER_BY_ID[conflict.playerId];
+              const teamNames = conflict.teamIds
+                .map((teamId) => teams.find((team) => team.teamId === teamId)?.name)
+                .filter(Boolean);
+              return (
+                <div
+                  key={conflict.playerId}
+                  className="rounded-xl border border-red-300/20 bg-red-950/20 p-3 text-sm text-white"
+                >
+                  <strong>{player?.fullName || player?.name || conflict.playerId}</strong>
+                  <span className="block mt-1 text-xs text-red-100/70">
+                    Appears in: {teamNames.join(" and ") || "multiple teams"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </PremiumCard>
+      ) : null}
+
       <PremiumCard className="p-5 sm:p-6">
         <SectionHeading
           eyebrow="Admin control centre"

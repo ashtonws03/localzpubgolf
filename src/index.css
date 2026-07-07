@@ -1753,8 +1753,8 @@ select.app-input {
 
 /* Cleaner logo presentation */
 .logo-halo img,
-header img[src="/localz-auckland-2026.svg"],
-.side-menu-panel img[src="/localz-auckland-2026.svg"] {
+header img[src="/localz-auckland-2026.png"],
+.side-menu-panel img[src="/localz-auckland-2026.png"] {
   filter: drop-shadow(0 12px 34px rgba(0, 0, 0, 0.35)) drop-shadow(0 0 20px rgba(213, 174, 82, 0.12));
 }
 
@@ -2371,8 +2371,8 @@ body,
 }
 
 .logo-halo img,
-header img[src="/localz-auckland-2026.svg"],
-.side-menu-panel img[src="/localz-auckland-2026.svg"] {
+header img[src="/localz-auckland-2026.png"],
+.side-menu-panel img[src="/localz-auckland-2026.png"] {
   filter:
     drop-shadow(0 16px 34px rgba(0, 0, 0, 0.42))
     drop-shadow(0 0 22px rgba(213, 174, 82, 0.12));
