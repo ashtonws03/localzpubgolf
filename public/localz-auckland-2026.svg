@@ -1,0 +1,101 @@
+<svg width="900" height="900" viewBox="0 0 900 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gold" x1="190" y1="110" x2="720" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF6CF"/>
+      <stop offset="0.2" stop-color="#F3DA8A"/>
+      <stop offset="0.55" stop-color="#D5AE52"/>
+      <stop offset="0.82" stop-color="#A97725"/>
+      <stop offset="1" stop-color="#8B5C13"/>
+    </linearGradient>
+    <linearGradient id="goldSoft" x1="240" y1="200" x2="670" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8E0" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#D5AE52" stop-opacity="0.85"/>
+    </linearGradient>
+    <filter id="glow" x="0" y="0" width="900" height="900" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- outer halo -->
+  <g opacity="0.9" filter="url(#glow)">
+    <circle cx="450" cy="438" r="214" stroke="url(#gold)" stroke-opacity="0.22" stroke-width="7"/>
+    <circle cx="450" cy="438" r="250" stroke="url(#goldSoft)" stroke-opacity="0.14" stroke-width="3"/>
+  </g>
+
+  <!-- left laurel -->
+  <g fill="url(#gold)">
+    <ellipse cx="242" cy="655" rx="26" ry="10" transform="rotate(-54 242 655)"/>
+    <ellipse cx="219" cy="624" rx="26" ry="10" transform="rotate(-49 219 624)"/>
+    <ellipse cx="199" cy="589" rx="26" ry="10" transform="rotate(-44 199 589)"/>
+    <ellipse cx="183" cy="551" rx="26" ry="10" transform="rotate(-37 183 551)"/>
+    <ellipse cx="170" cy="512" rx="26" ry="10" transform="rotate(-30 170 512)"/>
+    <ellipse cx="163" cy="470" rx="26" ry="10" transform="rotate(-18 163 470)"/>
+    <ellipse cx="163" cy="427" rx="26" ry="10" transform="rotate(-8 163 427)"/>
+    <ellipse cx="171" cy="386" rx="26" ry="10" transform="rotate(4 171 386)"/>
+    <ellipse cx="185" cy="347" rx="26" ry="10" transform="rotate(16 185 347)"/>
+    <ellipse cx="203" cy="311" rx="26" ry="10" transform="rotate(28 203 311)"/>
+    <ellipse cx="226" cy="279" rx="26" ry="10" transform="rotate(40 226 279)"/>
+    <ellipse cx="253" cy="251" rx="26" ry="10" transform="rotate(50 253 251)"/>
+  </g>
+
+  <!-- right laurel -->
+  <g transform="translate(900 0) scale(-1 1)" fill="url(#gold)">
+    <ellipse cx="242" cy="655" rx="26" ry="10" transform="rotate(-54 242 655)"/>
+    <ellipse cx="219" cy="624" rx="26" ry="10" transform="rotate(-49 219 624)"/>
+    <ellipse cx="199" cy="589" rx="26" ry="10" transform="rotate(-44 199 589)"/>
+    <ellipse cx="183" cy="551" rx="26" ry="10" transform="rotate(-37 183 551)"/>
+    <ellipse cx="170" cy="512" rx="26" ry="10" transform="rotate(-30 170 512)"/>
+    <ellipse cx="163" cy="470" rx="26" ry="10" transform="rotate(-18 163 470)"/>
+    <ellipse cx="163" cy="427" rx="26" ry="10" transform="rotate(-8 163 427)"/>
+    <ellipse cx="171" cy="386" rx="26" ry="10" transform="rotate(4 171 386)"/>
+    <ellipse cx="185" cy="347" rx="26" ry="10" transform="rotate(16 185 347)"/>
+    <ellipse cx="203" cy="311" rx="26" ry="10" transform="rotate(28 203 311)"/>
+    <ellipse cx="226" cy="279" rx="26" ry="10" transform="rotate(40 226 279)"/>
+    <ellipse cx="253" cy="251" rx="26" ry="10" transform="rotate(50 253 251)"/>
+  </g>
+
+  <!-- top text -->
+  <text x="450" y="122" text-anchor="middle" fill="url(#gold)" font-family="Georgia, serif" font-size="72" font-weight="700" letter-spacing="8">LOCALZ</text>
+  <text x="450" y="168" text-anchor="middle" fill="url(#goldSoft)" font-family="Inter, sans-serif" font-size="22" font-weight="700" letter-spacing="5">PUB GOLF</text>
+
+  <!-- central shield/circle -->
+  <g>
+    <circle cx="450" cy="438" r="158" fill="rgba(255,255,255,0)" stroke="url(#gold)" stroke-width="10"/>
+    <circle cx="450" cy="438" r="136" fill="rgba(255,255,255,0)" stroke="url(#goldSoft)" stroke-width="3" stroke-opacity="0.55"/>
+
+    <!-- beer glass -->
+    <g fill="url(#gold)">
+      <path d="M418 350H488C500 350 510 360 510 372V452C510 488 484 515 450 515C416 515 390 488 390 452V372C390 360 400 350 412 350H418Z"/>
+      <path d="M510 382H529C542 382 553 393 553 406C553 420 542 430 529 430H510" stroke="url(#gold)" stroke-width="12" fill="none"/>
+      <path d="M404 367C413 354 425 349 440 349C455 349 468 355 476 367" stroke="#061A46" stroke-opacity="0.82" stroke-width="10" stroke-linecap="round"/>
+      <path d="M407 399H491" stroke="#061A46" stroke-opacity="0.78" stroke-width="9" stroke-linecap="round"/>
+      <path d="M409 438H490" stroke="#061A46" stroke-opacity="0.78" stroke-width="9" stroke-linecap="round"/>
+      <path d="M416 476C427 486 438 491 450 491C462 491 473 486 484 476" stroke="#061A46" stroke-opacity="0.78" stroke-width="10" stroke-linecap="round"/>
+    </g>
+
+    <!-- New Zealand islands below beer -->
+    <g fill="url(#goldSoft)">
+      <path d="M474 532L487 539L490 551L482 560L468 561L460 553L462 542L474 532Z"/>
+      <path d="M493 557L505 564L508 575L501 585L488 586L479 578L481 568L493 557Z"/>
+      <path d="M509 588L520 594L523 604L517 612L505 613L498 607L499 597L509 588Z"/>
+      <path d="M451 543L462 549L465 558L458 566L447 567L439 560L441 551L451 543Z"/>
+      <path d="M437 562L448 568L451 577L445 585L434 586L426 579L428 570L437 562Z"/>
+      <path d="M425 588L435 593L438 602L433 609L423 610L416 604L418 595L425 588Z"/>
+    </g>
+  </g>
+
+  <!-- lower ribbon -->
+  <g>
+    <path d="M300 712H600L566 774H334L300 712Z" fill="url(#gold)"/>
+    <path d="M273 700H627L597 726H303L273 700Z" fill="url(#gold)"/>
+    <path d="M240 738L273 700V730L256 753L240 738Z" fill="url(#gold)"/>
+    <path d="M660 738L627 700V730L644 753L660 738Z" fill="url(#gold)"/>
+    <text x="450" y="745" text-anchor="middle" fill="#061A46" font-family="Georgia, serif" font-size="44" font-weight="700" letter-spacing="4">AUCKLAND 2026</text>
+  </g>
+
+  <text x="450" y="668" text-anchor="middle" fill="url(#gold)" font-family="Inter, sans-serif" font-size="22" font-weight="800" letter-spacing="4">FIRST NEW ZEALAND EDITION</text>
+</svg>
