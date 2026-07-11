@@ -2838,3 +2838,487 @@ body,
     0 7px 18px rgba(213, 174, 82, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.58);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Stage 4.8 player cards, directories, accordions and ladder totals          */
+/* -------------------------------------------------------------------------- */
+
+.fifa-card {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter:
+    drop-shadow(0 20px 34px rgba(0, 0, 0, 0.34))
+    drop-shadow(0 0 20px rgba(106, 72, 185, 0.16));
+}
+
+.fifa-card-sm {
+  max-width: 8.5rem;
+}
+
+.fifa-card-md {
+  max-width: 11.5rem;
+}
+
+.fifa-card-lg {
+  max-width: 15rem;
+}
+
+.fifa-card-xl {
+  max-width: 20rem;
+}
+
+.fifa-card-fallback {
+  display: flex;
+  min-height: 15rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  border: 1px solid rgba(243, 218, 138, 0.28);
+  border-radius: 1.2rem;
+  background: rgba(2, 12, 34, 0.55);
+  padding: 1rem;
+  color: white;
+  text-align: center;
+}
+
+.profile-fifa-hero {
+  background:
+    radial-gradient(circle at 15% 30%, rgba(94, 52, 177, 0.2), transparent 22rem),
+    radial-gradient(circle at 88% 8%, rgba(213, 174, 82, 0.12), transparent 17rem),
+    linear-gradient(145deg, rgba(9, 31, 76, 0.94), rgba(4, 13, 34, 0.95));
+}
+
+.profile-fifa-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.25rem;
+}
+
+.profile-fifa-card-wrap,
+.directory-profile-card-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-fifa-copy {
+  min-width: 0;
+  padding: 1rem 1rem 1rem 0;
+}
+
+.profile-trait-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.profile-trait {
+  min-width: 0;
+  border: 1px solid rgba(185, 198, 216, 0.15);
+  border-radius: 0.9rem;
+  background: rgba(2, 12, 34, 0.5);
+  padding: 0.75rem;
+}
+
+.profile-trait span {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: rgba(211, 228, 255, 0.5);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.profile-trait strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: white;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.profile-trait-strength {
+  border-color: rgba(243, 218, 138, 0.24);
+  background: linear-gradient(145deg, rgba(213, 174, 82, 0.1), rgba(2, 12, 34, 0.5));
+}
+
+.profile-trait-strength strong {
+  color: var(--pale-gold);
+}
+
+.profile-trait-weakness {
+  border-color: rgba(185, 198, 216, 0.18);
+  background: linear-gradient(145deg, rgba(185, 198, 216, 0.07), rgba(2, 12, 34, 0.5));
+}
+
+.team-fifa-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.team-fifa-grid-solo {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+.team-fifa-member {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid rgba(243, 218, 138, 0.18);
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(80, 53, 162, 0.16), transparent 17rem),
+    rgba(2, 12, 34, 0.48);
+  padding: 1rem;
+}
+
+.team-fifa-member-info {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.team-fifa-member-info h3 {
+  margin-top: 0.2rem;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.team-fifa-member-info .profile-trait-grid {
+  text-align: left;
+}
+
+.player-mini-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.player-mini-stat {
+  display: flex;
+  min-height: 4rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(185, 198, 216, 0.13);
+  border-radius: 0.8rem;
+  background: rgba(2, 10, 29, 0.5);
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.player-mini-stat strong {
+  color: var(--bright-gold);
+  font-size: 1rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.player-mini-stat span {
+  margin-top: 0.3rem;
+  color: rgba(211, 228, 255, 0.48);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.player-directory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.player-directory-item {
+  overflow: hidden;
+  border: 1px solid rgba(185, 198, 216, 0.15);
+  border-radius: 1rem;
+  background: rgba(2, 12, 34, 0.48);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.player-directory-item:hover,
+.player-directory-open {
+  border-color: rgba(243, 218, 138, 0.28);
+}
+
+.player-directory-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 4.4rem;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.player-directory-toggle:focus-visible,
+.admin-team-summary:focus-visible,
+.ladder-row:focus-visible {
+  outline: 2px solid rgba(243, 218, 138, 0.9);
+  outline-offset: 2px;
+}
+
+.player-directory-chevron,
+.admin-team-chevron {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(243, 218, 138, 0.26);
+  border-radius: 999px;
+  color: var(--bright-gold);
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.player-directory-content {
+  border-top: 1px solid rgba(99, 156, 255, 0.12);
+  padding: 1rem;
+  background: linear-gradient(145deg, rgba(8, 29, 72, 0.42), rgba(2, 10, 29, 0.3));
+}
+
+.directory-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.directory-profile-info {
+  min-width: 0;
+}
+
+.directory-team-info {
+  border: 1px solid rgba(243, 218, 138, 0.18);
+  border-radius: 0.9rem;
+  background: rgba(213, 174, 82, 0.07);
+  padding: 0.8rem;
+}
+
+.directory-team-info > span,
+.directory-team-info > strong,
+.directory-team-info > small {
+  display: block;
+}
+
+.directory-team-info > span {
+  color: rgba(211, 228, 255, 0.5);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.directory-team-info > strong {
+  margin-top: 0.2rem;
+  color: var(--pale-gold);
+  font-size: 1rem;
+}
+
+.directory-team-info > small {
+  margin-top: 0.3rem;
+  color: rgba(219, 233, 255, 0.62);
+  font-size: 0.75rem;
+}
+
+.ladder-row {
+  cursor: pointer;
+}
+
+.ladder-row-expanded {
+  border-color: rgba(243, 218, 138, 0.34);
+}
+
+.ladder-expanded-totals {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  border-top: 1px solid rgba(99, 156, 255, 0.12);
+  padding-top: 0.85rem;
+}
+
+.ladder-expanded-totals > div {
+  display: flex;
+  min-height: 4rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(185, 198, 216, 0.13);
+  border-radius: 0.85rem;
+  background: rgba(2, 10, 29, 0.52);
+  padding: 0.6rem;
+  text-align: center;
+}
+
+.ladder-expanded-totals span {
+  color: rgba(211, 228, 255, 0.5);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ladder-expanded-totals strong {
+  margin-top: 0.25rem;
+  color: var(--bright-gold);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.admin-team-accordion {
+  overflow: hidden;
+}
+
+.admin-team-accordion-open {
+  border-color: rgba(243, 218, 138, 0.3);
+}
+
+.admin-team-summary {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  min-height: 5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.admin-team-summary:hover {
+  background: rgba(40, 120, 255, 0.04);
+}
+
+.admin-team-editor-content {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid rgba(99, 156, 255, 0.12);
+  padding: 1rem;
+  background: rgba(2, 10, 29, 0.26);
+}
+
+@media (max-width: 900px) {
+  .profile-fifa-layout {
+    grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
+  }
+
+  .fifa-card-xl {
+    max-width: 17rem;
+  }
+
+  .team-fifa-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .team-fifa-grid-solo {
+    max-width: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .profile-fifa-layout,
+  .directory-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-fifa-layout {
+    padding: 1rem;
+  }
+
+  .profile-fifa-copy {
+    padding: 0 0.25rem 0.75rem;
+    text-align: center;
+  }
+
+  .profile-fifa-copy .flex {
+    justify-content: center;
+  }
+
+  .fifa-card-xl {
+    max-width: 15rem;
+  }
+
+  .directory-profile-card-wrap .fifa-card-lg {
+    max-width: 13rem;
+  }
+
+  .directory-profile-info {
+    text-align: center;
+  }
+
+  .directory-profile-info .flex {
+    justify-content: center;
+  }
+
+  .directory-profile-info .profile-trait-grid,
+  .directory-team-info {
+    text-align: left;
+  }
+}
+
+@media (max-width: 520px) {
+  .profile-trait-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .team-fifa-member {
+    padding: 0.8rem;
+  }
+
+  .team-fifa-member .fifa-card-lg {
+    max-width: 13rem;
+  }
+
+  .player-directory-toggle {
+    padding: 0.65rem 0.7rem;
+  }
+
+  .player-directory-content {
+    padding: 0.8rem;
+  }
+
+  .ladder-expanded-totals {
+    gap: 0.4rem;
+  }
+
+  .ladder-expanded-totals > div {
+    min-height: 3.6rem;
+    padding: 0.45rem;
+  }
+
+  .ladder-expanded-totals span {
+    font-size: 0.52rem;
+    letter-spacing: 0.07em;
+  }
+
+  .ladder-expanded-totals strong {
+    font-size: 1.15rem;
+  }
+
+  .admin-team-summary {
+    gap: 0.6rem;
+    padding: 0.8rem;
+  }
+}
+
+.team-fifa-member-info > .flex {
+  justify-content: center;
+}

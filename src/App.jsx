@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   getDocsFromServer,
@@ -100,6 +101,18 @@ function teamDocumentId(roundId, teamId) {
   return `${roundId}__${teamId}`;
 }
 
+function assignmentDocumentId(roundId, playerId) {
+  return `${roundId}__${playerId}`;
+}
+
+function assignmentDocumentRef(playerId) {
+  return doc(
+    db,
+    "golf_player_assignments",
+    assignmentDocumentId(ROUND_ID, playerId),
+  );
+}
+
 function sortTeamsByName(teams) {
   return [...teams].sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || "")),
@@ -142,6 +155,65 @@ async function fetchRoundTeamsFromServer() {
   return sortTeamsByName(
     snapshot.docs.map((teamDoc) => ({ id: teamDoc.id, ...teamDoc.data() })),
   );
+}
+
+async function reconcilePlayerAssignments(liveTeams) {
+  const { playerTeamMap, conflicts } = buildPlayerTeamState(liveTeams);
+  const conflictingPlayerIds = new Set(
+    conflicts.map((conflict) => conflict.playerId),
+  );
+
+  const assignmentsQuery = query(
+    collection(db, "golf_player_assignments"),
+    where("roundId", "==", ROUND_ID),
+  );
+  const assignmentSnapshot = await getDocsFromServer(assignmentsQuery);
+  const batch = writeBatch(db);
+  const existingByPlayerId = new Map();
+
+  assignmentSnapshot.docs.forEach((assignmentDoc) => {
+    const data = assignmentDoc.data();
+    const playerId = data.playerId;
+    if (!playerId || conflictingPlayerIds.has(playerId)) {
+      batch.delete(assignmentDoc.ref);
+      return;
+    }
+
+    existingByPlayerId.set(playerId, { ref: assignmentDoc.ref, data });
+    if (playerTeamMap[playerId] !== data.teamId) {
+      batch.delete(assignmentDoc.ref);
+    }
+  });
+
+  Object.entries(playerTeamMap).forEach(([playerId, teamId]) => {
+    if (conflictingPlayerIds.has(playerId)) return;
+    const existing = existingByPlayerId.get(playerId)?.data;
+    if (existing?.teamId === teamId) return;
+    batch.set(
+      assignmentDocumentRef(playerId),
+      {
+        roundId: ROUND_ID,
+        playerId,
+        teamId,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+
+  // The old round-level playerTeamMap is never used as a source of truth.
+  // It is deleted during every repair so stale values cannot block team creation.
+  batch.set(
+    doc(db, "golf_rounds", ROUND_ID),
+    {
+      playerTeamMap: deleteField(),
+      teamAssignmentVersion: 2,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await batch.commit();
 }
 
 function createTeamId() {
@@ -231,8 +303,12 @@ function Col({ className = "", children }) {
   return <div className={`flex flex-col ${className}`}>{children}</div>;
 }
 
-function PremiumCard({ className = "", children }) {
-  return <div className={`premium-card ${className}`}>{children}</div>;
+function PremiumCard({ className = "", children, ...props }) {
+  return (
+    <div className={`premium-card ${className}`} {...props}>
+      {children}
+    </div>
+  );
 }
 
 function Button({
@@ -336,6 +412,54 @@ function PlayerAvatar({ player, size = "md", className = "" }) {
   );
 }
 
+function PlayerFifaCard({ player, size = "md", className = "" }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const sizes = {
+    sm: "fifa-card-sm",
+    md: "fifa-card-md",
+    lg: "fifa-card-lg",
+    xl: "fifa-card-xl",
+  };
+  const playerName = player?.fullName || player?.name || "Unknown player";
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [player?.cardUrl]);
+
+  if (!player?.cardUrl || imageFailed) {
+    return (
+      <div className={`fifa-card fifa-card-fallback ${sizes[size] || sizes.md} ${className}`}>
+        <PlayerAvatar player={player} size="xl" />
+        <strong>{playerName}</strong>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={player.cardUrl}
+      alt={`${playerName} player card`}
+      className={`fifa-card ${sizes[size] || sizes.md} ${className}`}
+      loading="lazy"
+      onError={() => setImageFailed(true)}
+    />
+  );
+}
+
+function findTeamForPlayer(playerId, teams) {
+  return (
+    teams.find((team) =>
+      Array.isArray(team.memberIds) ? team.memberIds.includes(playerId) : false,
+    ) || null
+  );
+}
+
+function getTeamPlayers(team) {
+  return (team?.memberIds || [])
+    .map((memberId) => PLAYER_BY_ID[memberId])
+    .filter(Boolean);
+}
+
 function PremiumBackground() {
   return (
     <div className="premium-background" aria-hidden="true">
@@ -420,6 +544,8 @@ export default function PubGolfApp() {
   const [scoresLoaded, setScoresLoaded] = useState(false);
   const [syncError, setSyncError] = useState("");
   const teamMutationRef = useRef(false);
+  const assignmentRepairSignatureRef = useRef("");
+  const legacyMapCleanupInFlightRef = useRef(false);
   const pinInputRef = useRef(null);
 
   const currentPlayer = PLAYER_BY_ID[playerId] || null;
@@ -453,6 +579,30 @@ export default function PubGolfApp() {
             bonusRules: normalizeRules(data.bonusRules, DEFAULT_BONUS_RULES),
             penaltyRules: normalizeRules(data.penaltyRules, DEFAULT_PENALTY_RULES),
           });
+
+          const legacyMap = data.playerTeamMap;
+          const legacyMapExists =
+            legacyMap &&
+            typeof legacyMap === "object" &&
+            Object.keys(legacyMap).length > 0;
+          if (legacyMapExists && !legacyMapCleanupInFlightRef.current) {
+            legacyMapCleanupInFlightRef.current = true;
+            setDoc(
+              roundRef,
+              {
+                playerTeamMap: deleteField(),
+                teamAssignmentVersion: 2,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true },
+            )
+              .catch((error) => {
+                console.error("Legacy playerTeamMap cleanup failed", error);
+              })
+              .finally(() => {
+                legacyMapCleanupInFlightRef.current = false;
+              });
+          }
         } else if (!snapshot.metadata.fromCache) {
           setDoc(roundRef, {
             title: DEFAULT_TITLE,
@@ -461,7 +611,6 @@ export default function PubGolfApp() {
             holes: defaultHoles,
             bonusRules: DEFAULT_BONUS_RULES,
             penaltyRules: DEFAULT_PENALTY_RULES,
-            playerTeamMap: {},
             createdAt: serverTimestamp(),
           }).catch((error) => {
             console.error(error);
@@ -508,6 +657,24 @@ export default function PubGolfApp() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!teamsLoaded) return;
+
+    const signature = JSON.stringify(
+      teams.map((team) => ({
+        teamId: team.teamId,
+        memberIds: [...(team.memberIds || [])].sort(),
+      })),
+    );
+    if (assignmentRepairSignatureRef.current === signature) return;
+    assignmentRepairSignatureRef.current = signature;
+
+    reconcilePlayerAssignments(teams).catch((error) => {
+      console.error("Player assignment repair failed", error);
+      assignmentRepairSignatureRef.current = "";
+    });
+  }, [teams, teamsLoaded]);
 
   useEffect(() => {
     const scoresQuery = query(
@@ -936,16 +1103,6 @@ export default function PubGolfApp() {
         return false;
       }
 
-      const memberSignature = [...cleanMemberIds].sort().join("|");
-      const matchingTeam = liveTeams.find(
-        (liveTeam) =>
-          [...(liveTeam.memberIds || [])].sort().join("|") === memberSignature,
-      );
-      if (matchingTeam) {
-        toast.error("That exact team has already been created.");
-        return false;
-      }
-
       const teamId = createTeamId();
       const baseName = makeDefaultTeamName(cleanMemberIds);
       const usedNames = new Set(
@@ -966,32 +1123,51 @@ export default function PubGolfApp() {
         "golf_teams",
         teamDocumentId(ROUND_ID, teamId),
       );
+      const assignmentRefs = cleanMemberIds.map(assignmentDocumentRef);
 
       await runTransaction(db, async (transaction) => {
-        const roundSnapshot = await transaction.get(roundRef);
-        const storedPlayerTeamMap =
-          roundSnapshot.exists() &&
-          roundSnapshot.data()?.playerTeamMap &&
-          typeof roundSnapshot.data().playerTeamMap === "object"
-            ? roundSnapshot.data().playerTeamMap
-            : {};
-        const effectivePlayerTeamMap = {
-          ...livePlayerTeamMap,
-          ...storedPlayerTeamMap,
-        };
-
-        const assignedDuringSave = cleanMemberIds.find(
-          (memberId) => effectivePlayerTeamMap[memberId],
+        const assignmentSnapshots = await Promise.all(
+          assignmentRefs.map((assignmentRef) => transaction.get(assignmentRef)),
         );
-        if (assignedDuringSave) {
-          const error = new Error("PLAYER_ALREADY_ASSIGNED");
-          error.playerId = assignedDuringSave;
-          throw error;
-        }
+        const referencedTeamIds = [
+          ...new Set(
+            assignmentSnapshots
+              .map((snapshot) => snapshot.data()?.teamId)
+              .filter(Boolean),
+          ),
+        ];
+        const referencedTeamRefs = referencedTeamIds.map((assignedTeamId) =>
+          doc(db, "golf_teams", teamDocumentId(ROUND_ID, assignedTeamId)),
+        );
+        const referencedTeamSnapshots = await Promise.all(
+          referencedTeamRefs.map((assignedTeamRef) =>
+            transaction.get(assignedTeamRef),
+          ),
+        );
+        const referencedTeamsById = new Map(
+          referencedTeamIds.map((assignedTeamId, index) => [
+            assignedTeamId,
+            referencedTeamSnapshots[index],
+          ]),
+        );
 
-        const nextPlayerTeamMap = { ...effectivePlayerTeamMap };
-        cleanMemberIds.forEach((memberId) => {
-          nextPlayerTeamMap[memberId] = teamId;
+        cleanMemberIds.forEach((memberId, index) => {
+          const assignmentSnapshot = assignmentSnapshots[index];
+          if (!assignmentSnapshot.exists()) return;
+          const assignedTeamId = assignmentSnapshot.data()?.teamId;
+          const assignedTeamSnapshot = referencedTeamsById.get(assignedTeamId);
+          const assignedTeamData = assignedTeamSnapshot?.data();
+          const assignmentIsValid =
+            assignedTeamSnapshot?.exists() &&
+            assignedTeamData?.roundId === ROUND_ID &&
+            Array.isArray(assignedTeamData?.memberIds) &&
+            assignedTeamData.memberIds.includes(memberId);
+
+          if (assignmentIsValid) {
+            const error = new Error("PLAYER_ALREADY_ASSIGNED");
+            error.playerId = memberId;
+            throw error;
+          }
         });
 
         transaction.set(teamRef, {
@@ -1002,10 +1178,25 @@ export default function PubGolfApp() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+
+        cleanMemberIds.forEach((memberId, index) => {
+          transaction.set(
+            assignmentRefs[index],
+            {
+              roundId: ROUND_ID,
+              playerId: memberId,
+              teamId,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        });
+
         transaction.set(
           roundRef,
           {
-            playerTeamMap: nextPlayerTeamMap,
+            playerTeamMap: deleteField(),
+            teamAssignmentVersion: 2,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -1018,7 +1209,7 @@ export default function PubGolfApp() {
       console.error(error);
       if (error?.message === "PLAYER_ALREADY_ASSIGNED") {
         toast.error(
-          `${PLAYER_BY_ID[error.playerId]?.name || "That player"} was assigned to another team while this page was syncing. Refreshing is not required; wait a moment and try again.`,
+          `${PLAYER_BY_ID[error.playerId]?.name || "That player"} is already assigned to an existing team. The app has refreshed the assignment check automatically.`,
         );
       } else {
         toast.error(
@@ -1070,8 +1261,6 @@ export default function PubGolfApp() {
 
     try {
       const liveTeams = await fetchRoundTeamsFromServer();
-      const liveTeam =
-        liveTeams.find((liveItem) => liveItem.teamId === team.teamId) || team;
       const duplicateName = liveTeams.some(
         (otherTeam) =>
           otherTeam.teamId !== team.teamId &&
@@ -1083,35 +1272,6 @@ export default function PubGolfApp() {
         return false;
       }
 
-      const liveMembershipChanged =
-        [...(liveTeam.memberIds || [])].sort().join("|") !==
-        [...nextMemberIds].sort().join("|");
-      if (!liveMembershipChanged) {
-        await setDoc(
-          doc(db, "golf_teams", teamDocumentId(ROUND_ID, team.teamId)),
-          { name: nextName, updatedAt: serverTimestamp() },
-          { merge: true },
-        );
-        toast.success("Team updated");
-        return true;
-      }
-
-      const playerOnAnotherTeam = nextMemberIds.find((memberId) =>
-        liveTeams.some(
-          (otherTeam) =>
-            otherTeam.teamId !== team.teamId &&
-            otherTeam.memberIds?.includes(memberId),
-        ),
-      );
-      if (playerOnAnotherTeam) {
-        toast.error(
-          `${PLAYER_BY_ID[playerOnAnotherTeam]?.name || "That player"} is already on another team.`,
-        );
-        return false;
-      }
-
-      const { playerTeamMap: livePlayerTeamMap } =
-        buildPlayerTeamState(liveTeams);
       const roundRef = doc(db, "golf_rounds", ROUND_ID);
       const teamRef = doc(
         db,
@@ -1120,46 +1280,89 @@ export default function PubGolfApp() {
       );
 
       await runTransaction(db, async (transaction) => {
-        const [roundSnapshot, teamSnapshot] = await Promise.all([
-          transaction.get(roundRef),
-          transaction.get(teamRef),
-        ]);
+        const teamSnapshot = await transaction.get(teamRef);
         if (!teamSnapshot.exists()) {
           throw new Error("TEAM_NO_LONGER_EXISTS");
         }
 
-        const storedPlayerTeamMap =
-          roundSnapshot.exists() &&
-          roundSnapshot.data()?.playerTeamMap &&
-          typeof roundSnapshot.data().playerTeamMap === "object"
-            ? roundSnapshot.data().playerTeamMap
-            : {};
-        const nextPlayerTeamMap = {
-          ...livePlayerTeamMap,
-          ...storedPlayerTeamMap,
-        };
-        const currentMemberIds =
-          teamSnapshot.data()?.memberIds || liveTeam.memberIds || [];
+        const currentMemberIds = teamSnapshot.data()?.memberIds || [];
+        const affectedMemberIds = [
+          ...new Set([...currentMemberIds, ...nextMemberIds]),
+        ];
+        const assignmentRefs = affectedMemberIds.map(assignmentDocumentRef);
+        const assignmentSnapshots = await Promise.all(
+          assignmentRefs.map((assignmentRef) => transaction.get(assignmentRef)),
+        );
+        const otherTeamIds = [
+          ...new Set(
+            assignmentSnapshots
+              .map((snapshot) => snapshot.data()?.teamId)
+              .filter(
+                (assignedTeamId) =>
+                  assignedTeamId && assignedTeamId !== team.teamId,
+              ),
+          ),
+        ];
+        const otherTeamSnapshots = await Promise.all(
+          otherTeamIds.map((otherTeamId) =>
+            transaction.get(
+              doc(db, "golf_teams", teamDocumentId(ROUND_ID, otherTeamId)),
+            ),
+          ),
+        );
+        const otherTeamsById = new Map(
+          otherTeamIds.map((otherTeamId, index) => [
+            otherTeamId,
+            otherTeamSnapshots[index],
+          ]),
+        );
 
-        currentMemberIds.forEach((memberId) => {
-          if (nextPlayerTeamMap[memberId] === team.teamId) {
-            delete nextPlayerTeamMap[memberId];
+        nextMemberIds.forEach((memberId) => {
+          const affectedIndex = affectedMemberIds.indexOf(memberId);
+          const assignmentSnapshot = assignmentSnapshots[affectedIndex];
+          if (!assignmentSnapshot?.exists()) return;
+          const assignedTeamId = assignmentSnapshot.data()?.teamId;
+          if (!assignedTeamId || assignedTeamId === team.teamId) return;
+
+          const otherTeamSnapshot = otherTeamsById.get(assignedTeamId);
+          const otherTeamData = otherTeamSnapshot?.data();
+          const assignmentIsValid =
+            otherTeamSnapshot?.exists() &&
+            otherTeamData?.roundId === ROUND_ID &&
+            Array.isArray(otherTeamData?.memberIds) &&
+            otherTeamData.memberIds.includes(memberId);
+
+          if (assignmentIsValid) {
+            const error = new Error("PLAYER_ALREADY_ASSIGNED");
+            error.playerId = memberId;
+            throw error;
           }
         });
 
-        const assignedDuringSave = nextMemberIds.find(
-          (memberId) =>
-            nextPlayerTeamMap[memberId] &&
-            nextPlayerTeamMap[memberId] !== team.teamId,
-        );
-        if (assignedDuringSave) {
-          const error = new Error("PLAYER_ALREADY_ASSIGNED");
-          error.playerId = assignedDuringSave;
-          throw error;
-        }
+        currentMemberIds.forEach((memberId) => {
+          if (nextMemberIds.includes(memberId)) return;
+          const affectedIndex = affectedMemberIds.indexOf(memberId);
+          const assignmentSnapshot = assignmentSnapshots[affectedIndex];
+          if (
+            assignmentSnapshot?.exists() &&
+            assignmentSnapshot.data()?.teamId === team.teamId
+          ) {
+            transaction.delete(assignmentRefs[affectedIndex]);
+          }
+        });
 
         nextMemberIds.forEach((memberId) => {
-          nextPlayerTeamMap[memberId] = team.teamId;
+          const affectedIndex = affectedMemberIds.indexOf(memberId);
+          transaction.set(
+            assignmentRefs[affectedIndex],
+            {
+              roundId: ROUND_ID,
+              playerId: memberId,
+              teamId: team.teamId,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
         });
 
         transaction.set(
@@ -1174,7 +1377,8 @@ export default function PubGolfApp() {
         transaction.set(
           roundRef,
           {
-            playerTeamMap: nextPlayerTeamMap,
+            playerTeamMap: deleteField(),
+            teamAssignmentVersion: 2,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -1187,7 +1391,7 @@ export default function PubGolfApp() {
       console.error(error);
       if (error?.message === "PLAYER_ALREADY_ASSIGNED") {
         toast.error(
-          `${PLAYER_BY_ID[error.playerId]?.name || "That player"} was assigned to another team while this change was being saved.`,
+          `${PLAYER_BY_ID[error.playerId]?.name || "That player"} is already on another team.`,
         );
       } else if (error?.message === "TEAM_NO_LONGER_EXISTS") {
         toast.error("That team no longer exists in Firebase.");
@@ -1212,8 +1416,6 @@ export default function PubGolfApp() {
     if (!beginTeamMutation()) return false;
 
     try {
-      const liveTeams = await fetchRoundTeamsFromServer();
-      const { playerTeamMap: livePlayerTeamMap } = buildPlayerTeamState(liveTeams);
       const roundRef = doc(db, "golf_rounds", ROUND_ID);
       const teamRef = doc(
         db,
@@ -1222,28 +1424,21 @@ export default function PubGolfApp() {
       );
 
       await runTransaction(db, async (transaction) => {
-        const [roundSnapshot, teamSnapshot] = await Promise.all([
-          transaction.get(roundRef),
-          transaction.get(teamRef),
-        ]);
-        const storedPlayerTeamMap =
-          roundSnapshot.exists() &&
-          roundSnapshot.data()?.playerTeamMap &&
-          typeof roundSnapshot.data().playerTeamMap === "object"
-            ? roundSnapshot.data().playerTeamMap
-            : {};
-        const nextPlayerTeamMap = {
-          ...livePlayerTeamMap,
-          ...storedPlayerTeamMap,
-        };
-        const memberIds =
-          teamSnapshot.exists()
-            ? teamSnapshot.data()?.memberIds || []
-            : team.memberIds || [];
+        const teamSnapshot = await transaction.get(teamRef);
+        const memberIds = teamSnapshot.exists()
+          ? teamSnapshot.data()?.memberIds || []
+          : team.memberIds || [];
+        const assignmentRefs = memberIds.map(assignmentDocumentRef);
+        const assignmentSnapshots = await Promise.all(
+          assignmentRefs.map((assignmentRef) => transaction.get(assignmentRef)),
+        );
 
-        memberIds.forEach((memberId) => {
-          if (nextPlayerTeamMap[memberId] === team.teamId) {
-            delete nextPlayerTeamMap[memberId];
+        assignmentSnapshots.forEach((assignmentSnapshot, index) => {
+          if (
+            assignmentSnapshot.exists() &&
+            assignmentSnapshot.data()?.teamId === team.teamId
+          ) {
+            transaction.delete(assignmentRefs[index]);
           }
         });
 
@@ -1251,7 +1446,8 @@ export default function PubGolfApp() {
         transaction.set(
           roundRef,
           {
-            playerTeamMap: nextPlayerTeamMap,
+            playerTeamMap: deleteField(),
+            teamAssignmentVersion: 2,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -1367,7 +1563,7 @@ export default function PubGolfApp() {
 // -----------------------------------------------------------------------------
 // Login and admin PIN
 // -----------------------------------------------------------------------------
-function LoginScreen({ loginCode, setLoginCode, onLogin, location }) {
+function LoginScreen({ loginCode, setLoginCode, onLogin }) {
   return (
     <div className="app-shell flex min-h-screen items-center justify-center px-4 py-10">
       <PremiumBackground />
@@ -1410,9 +1606,6 @@ function LoginScreen({ loginCode, setLoginCode, onLogin, location }) {
               alt="Pub Golf"
               className="relative z-10 max-h-[290px] w-full max-w-[420px] object-contain"
             />
-          </div>
-          <div className="mt-3 text-xs font-bold uppercase tracking-[0.42em] text-amber-200/80">
-            {location}
           </div>
         </div>
       </div>
@@ -1672,6 +1865,7 @@ function PubGolfPage({
           <PlayerProfile
             player={player}
             team={team}
+            teams={teams}
             onUpdateTeam={onUpdateTeam}
           />
         ) : null}
@@ -1780,13 +1974,15 @@ function SideMenu({
 // -----------------------------------------------------------------------------
 // Waiting and profile screens
 // -----------------------------------------------------------------------------
-function WaitingForTeam({ player, isAdmin }) {
+function WaitingForTeam({ player, isAdmin, showPlayerCard = true }) {
   return (
     <PremiumCard className="mx-auto max-w-2xl p-6 text-center sm:p-9">
-      <div className="flex justify-center">
-        <PlayerAvatar player={player} size="xl" />
-      </div>
-      <div className="section-eyebrow mt-5">Profile ready</div>
+      {showPlayerCard ? (
+        <div className="flex justify-center">
+          <PlayerFifaCard player={player} size="md" />
+        </div>
+      ) : null}
+      <div className={`section-eyebrow ${showPlayerCard ? "mt-5" : ""}`}>Profile ready</div>
       <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">
         Waiting for team assignment
       </h2>
@@ -1802,25 +1998,32 @@ function WaitingForTeam({ player, isAdmin }) {
   );
 }
 
-function PlayerProfile({ player, team, onUpdateTeam }) {
+function PlayerProfile({ player, team, teams, onUpdateTeam }) {
+  const [expandedPlayerId, setExpandedPlayerId] = useState("");
+  const otherPlayers = PLAYERS.filter((otherPlayer) => otherPlayer.id !== player.id);
+
   return (
     <div className="space-y-4">
-      <PremiumCard className="overflow-hidden">
-        <div className="profile-banner px-5 py-8 sm:px-8">
-          <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-            <PlayerAvatar player={player} size="xl" />
-            <div>
-              <div className="section-eyebrow">Player profile</div>
-              <h2 className="mt-1 text-3xl font-black text-white">
-                {player.fullName || player.name}
-              </h2>
-              <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
-                <Badge className="badge-blue">{player.name}</Badge>
-                {player.nickname ? <Badge>{player.nickname}</Badge> : null}
-              </div>
-              <p className="mt-3 text-sm text-blue-100/70">
-                {team ? `Member of ${team.name}` : "Not assigned to a team yet"}
-              </p>
+      <PremiumCard className="profile-fifa-hero overflow-hidden">
+        <div className="profile-fifa-layout">
+          <div className="profile-fifa-card-wrap">
+            <PlayerFifaCard player={player} size="xl" />
+          </div>
+          <div className="profile-fifa-copy">
+            <div className="section-eyebrow">Player profile</div>
+            <h2 className="mt-1 text-3xl font-black text-white sm:text-4xl">
+              {player.fullName || player.name}
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge className="badge-blue">{player.name}</Badge>
+              <Badge>{player.nickname}</Badge>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-blue-100/70">
+              {team ? `Member of ${team.name}` : "Not assigned to a team yet"}
+            </p>
+            <div className="profile-trait-grid mt-5">
+              <ProfileTrait label="Strength" value={player.strength} variant="strength" />
+              <ProfileTrait label="Weakness" value={player.weakness} variant="weakness" />
             </div>
           </div>
         </div>
@@ -1834,10 +2037,74 @@ function PlayerProfile({ player, team, onUpdateTeam }) {
       </div>
 
       {team ? (
-        <TeamProfileCard team={team} player={player} onUpdateTeam={onUpdateTeam} />
+        <TeamProfileCard
+          team={team}
+          player={player}
+          onUpdateTeam={onUpdateTeam}
+        />
       ) : (
-        <WaitingForTeam player={player} isAdmin={false} />
+        <WaitingForTeam player={player} isAdmin={false} showPlayerCard={false} />
       )}
+
+      <PremiumCard className="p-5 sm:p-6">
+        <SectionHeading
+          eyebrow="All Players"
+          title="Player Directory"
+          description="Tap a player to view their card, career statistics, strengths, weaknesses and current team."
+        />
+
+        <div className="player-directory-list">
+          {otherPlayers.map((otherPlayer) => {
+            const otherTeam = findTeamForPlayer(otherPlayer.id, teams);
+            const expanded = expandedPlayerId === otherPlayer.id;
+            return (
+              <div
+                key={otherPlayer.id}
+                className={`player-directory-item ${expanded ? "player-directory-open" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="player-directory-toggle"
+                  aria-expanded={expanded}
+                  onClick={() =>
+                    setExpandedPlayerId((current) =>
+                      current === otherPlayer.id ? "" : otherPlayer.id,
+                    )
+                  }
+                >
+                  <PlayerAvatar player={otherPlayer} size="sm" />
+                  <div className="min-w-0 flex-1 text-left">
+                    <div className="truncate font-black text-white">
+                      {otherPlayer.fullName || otherPlayer.name}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-blue-100/55">
+                      {otherPlayer.nickname} · {otherTeam ? otherTeam.name : "Unassigned"}
+                    </div>
+                  </div>
+                  <span className="player-directory-chevron" aria-hidden="true">
+                    {expanded ? "−" : "+"}
+                  </span>
+                </button>
+
+                {expanded ? (
+                  <div className="player-directory-content">
+                    <PlayerProfileDetails player={otherPlayer} teams={teams} />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </PremiumCard>
+    </div>
+  );
+}
+
+function ProfileTrait({ label, value, variant = "strength" }) {
+  return (
+    <div className={`profile-trait profile-trait-${variant}`}>
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
     </div>
   );
 }
@@ -1865,6 +2132,15 @@ function StatCard({ label, value }) {
   );
 }
 
+function PlayerMiniStat({ label, value }) {
+  return (
+    <div className="player-mini-stat">
+      <strong>{value ?? "—"}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function TeamProfileCard({ team, player, onUpdateTeam }) {
   const [teamName, setTeamName] = useState(team.name || "");
 
@@ -1872,26 +2148,36 @@ function TeamProfileCard({ team, player, onUpdateTeam }) {
     setTeamName(team.name || "");
   }, [team.name]);
 
-  const members = (team.memberIds || [])
-    .map((id) => PLAYER_BY_ID[id])
-    .filter(Boolean);
+  const members = getTeamPlayers(team);
 
   return (
     <PremiumCard className="p-5 sm:p-6">
       <SectionHeading
         eyebrow="Your team"
         title={team.name}
-        description="Both team members can open and update the same scorecard."
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`team-fifa-grid ${members.length === 1 ? "team-fifa-grid-solo" : ""}`}>
         {members.map((member) => (
-          <div key={member.id} className="member-tile">
-            <PlayerAvatar player={member} size="md" />
-            <div className="min-w-0">
-              <div className="truncate font-bold text-white">{member.name}</div>
-              <div className="text-xs text-blue-100/55">
+          <div key={member.id} className="team-fifa-member">
+            <PlayerFifaCard player={member} size="lg" />
+            <div className="team-fifa-member-info">
+              <div className="section-eyebrow">
                 {member.id === player.id ? "You" : "Teammate"}
+              </div>
+              <h3>{member.fullName || member.name}</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge className="badge-blue">{member.name}</Badge>
+                <Badge>{member.nickname}</Badge>
+              </div>
+              <div className="player-mini-stat-grid mt-4">
+                <PlayerMiniStat label="Years" value={member.stats?.yearsPlayed} />
+                <PlayerMiniStat label="Wins" value={member.stats?.wins} />
+                <PlayerMiniStat label="Debut" value={member.stats?.debutYear} />
+              </div>
+              <div className="profile-trait-grid mt-4">
+                <ProfileTrait label="Strength" value={member.strength} variant="strength" />
+                <ProfileTrait label="Weakness" value={member.weakness} variant="weakness" />
               </div>
             </div>
           </div>
@@ -1904,7 +2190,11 @@ function TeamProfileCard({ team, player, onUpdateTeam }) {
           <Input value={teamName} onChange={(event) => setTeamName(event.target.value)} />
           <Button
             onClick={() =>
-              onUpdateTeam(team, { name: teamName, memberIds: team.memberIds }, { skipConfirm: true })
+              onUpdateTeam(
+                team,
+                { name: teamName, memberIds: team.memberIds },
+                { skipConfirm: true },
+              )
             }
           >
             Save name
@@ -1912,6 +2202,54 @@ function TeamProfileCard({ team, player, onUpdateTeam }) {
         </div>
       </div>
     </PremiumCard>
+  );
+}
+
+function PlayerProfileDetails({ player, teams }) {
+  const playerTeam = findTeamForPlayer(player.id, teams);
+  const teammates = getTeamPlayers(playerTeam).filter(
+    (teamPlayer) => teamPlayer.id !== player.id,
+  );
+
+  return (
+    <div className="directory-profile-grid">
+      <div className="directory-profile-card-wrap">
+        <PlayerFifaCard player={player} size="lg" />
+      </div>
+      <div className="directory-profile-info">
+        <div className="section-eyebrow">Player profile</div>
+        <h3 className="mt-1 text-2xl font-black text-white">
+          {player.fullName || player.name}
+        </h3>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge className="badge-blue">{player.name}</Badge>
+          <Badge>{player.nickname}</Badge>
+        </div>
+
+        <div className="player-mini-stat-grid mt-4">
+          <PlayerMiniStat label="Years" value={player.stats?.yearsPlayed} />
+          <PlayerMiniStat label="Wins" value={player.stats?.wins} />
+          <PlayerMiniStat label="Debut" value={player.stats?.debutYear} />
+        </div>
+
+        <div className="profile-trait-grid mt-4">
+          <ProfileTrait label="Strength" value={player.strength} variant="strength" />
+          <ProfileTrait label="Weakness" value={player.weakness} variant="weakness" />
+        </div>
+
+        <div className="directory-team-info mt-4">
+          <span>Current team</span>
+          <strong>{playerTeam ? playerTeam.name : "Not assigned"}</strong>
+          {playerTeam ? (
+            <small>
+              {teammates.length
+                ? `Teammate: ${teammates.map((teammate) => teammate.name).join(" & ")}`
+                : "Solo team"}
+            </small>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2263,6 +2601,7 @@ function ScoreInputBlock({ label, helper, value, setValue, disabled }) {
 // Ladder
 // -----------------------------------------------------------------------------
 function GolfLadder({ roundId, teams, scores, loggedInTeamId, activeHoleIds }) {
+  const [expandedTeamId, setExpandedTeamId] = useState("");
   const rows = useMemo(() => {
     const activeHoleSet = new Set(activeHoleIds || []);
     return teams
@@ -2273,6 +2612,10 @@ function GolfLadder({ roundId, teams, scores, loggedInTeamId, activeHoleIds }) {
             score.teamId === team.teamId &&
             score.confirmed &&
             activeHoleSet.has(score.holeId),
+        );
+        const sips = confirmedScores.reduce(
+          (sum, score) => sum + Math.max(0, Math.round(Number(score.sips) || 0)),
+          0,
         );
         const total = confirmedScores.reduce(
           (sum, score) => sum + Math.round(Number(score.holeTotal) || 0),
@@ -2294,6 +2637,7 @@ function GolfLadder({ roundId, teams, scores, loggedInTeamId, activeHoleIds }) {
         return {
           ...team,
           total,
+          sips,
           bonuses,
           penalties,
           forAgainst,
@@ -2343,6 +2687,12 @@ function GolfLadder({ roundId, teams, scores, loggedInTeamId, activeHoleIds }) {
             position={index + 1}
             highlighted={row.teamId === loggedInTeamId}
             totalHoles={(activeHoleIds || []).length}
+            expanded={expandedTeamId === row.teamId}
+            onToggle={() =>
+              setExpandedTeamId((current) =>
+                current === row.teamId ? "" : row.teamId,
+              )
+            }
           />
         ))}
 
@@ -2356,7 +2706,14 @@ function GolfLadder({ roundId, teams, scores, loggedInTeamId, activeHoleIds }) {
   );
 }
 
-function LadderRow({ row, position, highlighted, totalHoles }) {
+function LadderRow({
+  row,
+  position,
+  highlighted,
+  totalHoles,
+  expanded,
+  onToggle,
+}) {
   const members = (row.memberIds || [])
     .map((memberId) => PLAYER_BY_ID[memberId])
     .filter(Boolean);
@@ -2364,7 +2721,17 @@ function LadderRow({ row, position, highlighted, totalHoles }) {
 
   return (
     <PremiumCard
-      className={`ladder-row ${podiumClass} ${highlighted ? "ladder-highlighted" : ""}`}
+      className={`ladder-row ${podiumClass} ${highlighted ? "ladder-highlighted" : ""} ${expanded ? "ladder-row-expanded" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
     >
       {position <= 3 ? (
         <div className={`ladder-podium-banner ladder-podium-banner-${position}`} />
@@ -2387,7 +2754,7 @@ function LadderRow({ row, position, highlighted, totalHoles }) {
             Score <strong className="text-white">{row.total}</strong>
           </span>
           <span>
-            F/A{' '}
+            F/A{" "}
             <strong className={row.forAgainst <= 0 ? "text-amber-200" : "text-orange-300"}>
               {formatSignedNumber(row.forAgainst)}
             </strong>
@@ -2411,6 +2778,23 @@ function LadderRow({ row, position, highlighted, totalHoles }) {
           </div>
         ))}
       </div>
+
+      {expanded ? (
+        <div className="ladder-expanded-totals">
+          <div>
+            <span>Total sips</span>
+            <strong>{row.sips}</strong>
+          </div>
+          <div>
+            <span>Total bonuses</span>
+            <strong>−{row.bonuses}</strong>
+          </div>
+          <div>
+            <span>Total penalties</span>
+            <strong>+{row.penalties}</strong>
+          </div>
+        </div>
+      ) : null}
     </PremiumCard>
   );
 }
@@ -2441,7 +2825,6 @@ function BonusesPenaltiesPage({
         <SectionHeading
           eyebrow="Scoring reference"
           title="Bonuses & penalties"
-          description="Bonuses subtract points from your score. Penalties add points to your score."
         />
 
         <div className="rules-grid">
@@ -3068,11 +3451,21 @@ function AdminTeamManager({
   const [firstPlayerId, setFirstPlayerId] = useState("");
   const [secondPlayerId, setSecondPlayerId] = useState("");
   const [soloTeam, setSoloTeam] = useState(false);
+  const [expandedTeamId, setExpandedTeamId] = useState("");
 
   useEffect(() => {
     if (firstPlayerId && assignedIds.has(firstPlayerId)) setFirstPlayerId("");
     if (secondPlayerId && assignedIds.has(secondPlayerId)) setSecondPlayerId("");
   }, [assignedIds, firstPlayerId, secondPlayerId]);
+
+  useEffect(() => {
+    if (
+      expandedTeamId &&
+      !teams.some((team) => team.teamId === expandedTeamId)
+    ) {
+      setExpandedTeamId("");
+    }
+  }, [expandedTeamId, teams]);
 
   const createSelectedTeam = async () => {
     if (!firstPlayerId) {
@@ -3250,6 +3643,12 @@ function AdminTeamManager({
             scoreCount={scores.filter((score) => score.teamId === team.teamId).length}
             onSave={onUpdateTeam}
             onDelete={onDeleteTeam}
+            expanded={expandedTeamId === team.teamId}
+            onToggle={() =>
+              setExpandedTeamId((current) =>
+                current === team.teamId ? "" : team.teamId,
+              )
+            }
           />
         ))}
       </div>
@@ -3268,7 +3667,15 @@ function AdminNumber({ label, value }) {
   );
 }
 
-function AdminTeamEditor({ team, teams, scoreCount, onSave, onDelete }) {
+function AdminTeamEditor({
+  team,
+  teams,
+  scoreCount,
+  onSave,
+  onDelete,
+  expanded,
+  onToggle,
+}) {
   const [name, setName] = useState(team.name || "");
   const [memberOne, setMemberOne] = useState(team.memberIds?.[0] || "");
   const [memberTwo, setMemberTwo] = useState(team.memberIds?.[1] || "");
@@ -3289,82 +3696,94 @@ function AdminTeamEditor({ team, teams, scoreCount, onSave, onDelete }) {
       !assignedToOtherTeam.has(player.id) || team.memberIds?.includes(player.id),
   );
 
-  const members = (team.memberIds || [])
-    .map((memberId) => PLAYER_BY_ID[memberId])
-    .filter(Boolean);
+  const members = getTeamPlayers(team);
 
   return (
-    <PremiumCard className="p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+    <PremiumCard className={`admin-team-accordion ${expanded ? "admin-team-accordion-open" : ""}`}>
+      <button
+        type="button"
+        className="admin-team-summary"
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex -space-x-3">
             {members.map((member) => (
               <PlayerAvatar key={member.id} player={member} size="md" />
             ))}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 text-left">
             <h3 className="truncate text-xl font-black text-white">{team.name}</h3>
             <p className="mt-0.5 text-xs text-blue-100/55">
               {members.map((member) => member.name).join(" & ")} · {scoreCount} saved score record{scoreCount === 1 ? "" : "s"}
             </p>
           </div>
         </div>
+        <span className="admin-team-chevron" aria-hidden="true">
+          {expanded ? "−" : "+"}
+        </span>
+      </button>
 
-        <Button variant="danger" size="sm" onClick={() => onDelete(team)}>
-          Disband team
-        </Button>
-      </div>
+      {expanded ? (
+        <div className="admin-team-editor-content">
+          <div className="grid gap-3 lg:grid-cols-[1fr_0.8fr_0.8fr_auto] lg:items-end">
+            <div>
+              <Label>Team name</Label>
+              <Input className="mt-1" value={name} onChange={(event) => setName(event.target.value)} />
+            </div>
+            <div>
+              <Label>Player 1</Label>
+              <Select
+                className="mt-1"
+                value={memberOne}
+                onChange={(event) => setMemberOne(event.target.value)}
+              >
+                <option value="">Select player</option>
+                {availablePlayers
+                  .filter((player) => player.id !== memberTwo)
+                  .map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.fullName || player.name}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Player 2 / solo</Label>
+              <Select
+                className="mt-1"
+                value={memberTwo}
+                onChange={(event) => setMemberTwo(event.target.value)}
+              >
+                <option value="">Solo team</option>
+                {availablePlayers
+                  .filter((player) => player.id !== memberOne)
+                  .map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.fullName || player.name}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+            <Button
+              onClick={() =>
+                onSave(team, {
+                  name,
+                  memberIds: [memberOne, memberTwo].filter(Boolean),
+                })
+              }
+            >
+              Save team
+            </Button>
+          </div>
 
-      <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_0.8fr_0.8fr_auto] lg:items-end">
-        <div>
-          <Label>Team name</Label>
-          <Input className="mt-1" value={name} onChange={(event) => setName(event.target.value)} />
+          <div className="mt-4 flex justify-end">
+            <Button variant="danger" size="sm" onClick={() => onDelete(team)}>
+              Disband team
+            </Button>
+          </div>
         </div>
-        <div>
-          <Label>Player 1</Label>
-          <Select
-            className="mt-1"
-            value={memberOne}
-            onChange={(event) => setMemberOne(event.target.value)}
-          >
-            <option value="">Select player</option>
-            {availablePlayers
-              .filter((player) => player.id !== memberTwo)
-              .map((player) => (
-                <option key={player.id} value={player.id}>
-                  {player.fullName || player.name}
-                </option>
-              ))}
-          </Select>
-        </div>
-        <div>
-          <Label>Player 2 / solo</Label>
-          <Select
-            className="mt-1"
-            value={memberTwo}
-            onChange={(event) => setMemberTwo(event.target.value)}
-          >
-            <option value="">Solo team</option>
-            {availablePlayers
-              .filter((player) => player.id !== memberOne)
-              .map((player) => (
-                <option key={player.id} value={player.id}>
-                  {player.fullName || player.name}
-                </option>
-              ))}
-          </Select>
-        </div>
-        <Button
-          onClick={() =>
-            onSave(team, {
-              name,
-              memberIds: [memberOne, memberTwo].filter(Boolean),
-            })
-          }
-        >
-          Save team
-        </Button>
-      </div>
+      ) : null}
     </PremiumCard>
   );
 }
